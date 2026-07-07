@@ -1,0 +1,12 @@
+{
+  "title": "SK Hynix seeks Nasdaq listing as AI memory trade wobbles",
+  "summary": "SK Hynix is planning a US listing to access AI investors after a massive run in HBM and memory stocks.",
+  "source": "Fortune / Bloomberg",
+  "published_at": "2026-07-05T17:48:00Z",
+  "url": "https://fortune.com/2026/07/05/sk-hynix-us-stock-listing-nasdaq-29-billion-micron-ai-boom-chips/",
+  "symbols": ["000660.KS", "005930.KS", "MU", "SMH"],
+  "market": {
+    "MU": {"return_pct": -0.6, "volume_z": 1.2},
+    "SMH": {"return_pct": -0.4, "volume_z": 1.0}
+  }
+}

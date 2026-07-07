@@ -1,0 +1,13 @@
+{
+  "title": "South Korea announces massive semiconductor investment with Samsung and SK Hynix",
+  "summary": "The plan includes new fabs and HBM facilities to expand memory production capacity for AI infrastructure.",
+  "source": "Tom's Hardware",
+  "published_at": "2026-06-30T14:00:00Z",
+  "url": "https://www.tomshardware.com/tech-industry/semiconductors/south-korea-unveils-usd520-billion-investment-plan-with-samsung-and-sk-hynix-to-expand-memory-chip-dominance-plan-includes-four-new-fabs-and-hbm-facilities-amid-strong-government-support",
+  "symbols": ["005930.KS", "000660.KS", "MU", "AMAT", "LRCX"],
+  "market": {
+    "AMAT": {"return_pct": 2.1, "volume_z": 2.0},
+    "LRCX": {"return_pct": 1.8, "volume_z": 2.2},
+    "MU": {"return_pct": 0.8, "volume_z": 1.1}
+  }
+}

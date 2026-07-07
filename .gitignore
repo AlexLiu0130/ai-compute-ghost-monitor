@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+
+# Local generated data and caches
+data/
+reports/
+
+# Local handoff / scratch notes
+FRONTEND_HANDOFF.md

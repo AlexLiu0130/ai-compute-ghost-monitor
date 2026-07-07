@@ -1,0 +1,14 @@
+{
+  "title": "Meta reportedly plans to sell excess AI compute capacity",
+  "summary": "Meta is building a cloud business to sell excess AI computing capacity, raising worries that big tech may have overbuilt AI infrastructure.",
+  "source": "Reuters / Bloomberg",
+  "published_at": "2026-07-01T12:52:00Z",
+  "url": "https://finance.yahoo.com/technology/ai/articles/meta-sell-excess-ai-computing-125201772.html",
+  "symbols": ["META", "NVDA", "AMD", "SMH", "CRWV", "VRT"],
+  "market": {
+    "META": {"return_pct": 6.0, "volume_z": 3.0},
+    "NVDA": {"return_pct": -2.4, "volume_z": 2.3},
+    "AMD": {"return_pct": -2.1, "volume_z": 2.1},
+    "SMH": {"return_pct": -1.8, "volume_z": 2.0}
+  }
+}
