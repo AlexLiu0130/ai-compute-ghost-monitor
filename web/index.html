@@ -1,84 +1,293 @@
 <!doctype html>
 <html lang="zh-CN">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="description" content="把 AI 算力新闻转化为可解释的市场叙事信号。" />
-<title>Ghost Monitor — AI 算力叙事监控</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
-<link rel="stylesheet" href="site.css" />
-</head>
-<body>
-<div class="scanlines" aria-hidden="true"></div>
-<header class="site-nav shell">
-  <a class="site-brand" href="/"><span class="signal-dot"></span><span>GHOST <em>MONITOR</em></span></a>
-  <nav class="site-links" aria-label="Primary">
-    <a href="/" data-zh="首页" data-en="Home">首页</a>
-    <a href="/monitor" data-zh="监控台" data-en="Monitor">监控台</a>
-    <a href="/developer" data-zh="开发者" data-en="Developers">开发者</a>
-  </nav>
-  <div class="site-actions">
-    <button class="language-toggle" type="button" aria-label="Switch language">EN</button>
-    <a class="nav-star pressable github-star" href="https://github.com/AlexLiu0130/ai-compute-ghost-monitor" target="_blank" rel="noreferrer"><span>GitHub</span><b>★ Star <span class="star-count" data-star-count aria-live="polite">0</span></b></a>
-  </div>
-</header>
-
-<main>
-  <section class="hero shell">
-    <div class="hero-copy reveal-item">
-      <div class="eyebrow"><span></span><b data-zh="AI 算力叙事风险雷达" data-en="AI COMPUTE NARRATIVE RISK RADAR">AI 算力叙事风险雷达</b></div>
-      <h1 data-zh="<span class='headline-nowrap'>在市场定价前，</span><em>看见鬼故事。</em>" data-en="See the ghost story<br><em>before it gets priced.</em>"><span class="headline-nowrap">在市场定价前，</span><em>看见鬼故事。</em></h1>
-      <p class="hero-lede" data-zh="从碎片新闻中识别真正会改变 AI 基础设施预期的叙事，映射受影响标的，并在反应交易日收盘后自动验证市场表现。" data-en="Detect narratives that can reprice AI infrastructure, map exposed tickers, and verify the market reaction after the reaction session closes.">从碎片新闻中识别真正会改变 AI 基础设施预期的叙事，映射受影响标的，并在反应交易日收盘后自动验证市场表现。</p>
-      <div class="hero-actions">
-        <a class="button primary pressable" href="/monitor"><span data-zh="打开监控台" data-en="Open monitor">打开监控台</span><b>↗</b></a>
-        <a class="button secondary pressable" href="/developer"><span data-zh="查看实现方式" data-en="See how it works">查看实现方式</span><b>→</b></a>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="把 AI 算力新闻转化为可解释的市场叙事信号。"
+    />
+    <title>Ghost Monitor — AI 算力叙事监控</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media = 'all'"
+    />
+    <link rel="stylesheet" href="site.css" />
+  </head>
+  <body>
+    <div class="scanlines" aria-hidden="true"></div>
+    <header class="site-nav shell">
+      <a class="site-brand" href="/"
+        ><span class="signal-dot"></span><span>GHOST <em>MONITOR</em></span></a
+      >
+      <nav class="site-links" aria-label="Primary">
+        <a href="/" data-zh="首页" data-en="Home">首页</a>
+        <a href="/monitor" data-zh="监控台" data-en="Monitor">监控台</a>
+        <a href="/developer" data-zh="开发者" data-en="Developers">开发者</a>
+      </nav>
+      <div class="site-actions">
+        <button
+          class="language-toggle"
+          type="button"
+          aria-label="Switch language"
+        >
+          EN
+        </button>
+        <a
+          class="nav-star pressable github-star"
+          href="https://github.com/AlexLiu0130/ai-compute-ghost-monitor"
+          target="_blank"
+          rel="noreferrer"
+          ><span>GitHub</span
+          ><b
+            >★ Star
+            <span class="star-count" data-star-count aria-live="polite"
+              >0</span
+            ></b
+          ></a
+        >
       </div>
-      <div class="proof-strip">
-        <span data-zh="覆盖" data-en="TRACKING">覆盖</span>
-        <b>NVDA</b><b>META</b><b>TSM</b><b>MU</b><b>VRT</b><b>+35</b>
-      </div>
-    </div>
+    </header>
 
-    <div class="signal-console reveal-item" aria-label="Ghost signal preview">
-      <div class="console-bar"><span><i></i><i></i><i></i></span><code>ghost-monitor / live-feed</code><b>● LIVE</b></div>
-      <div class="radar-panel">
-        <div class="radar-grid"></div><div class="radar-sweep"></div>
-        <div class="radar-score"><small>GHOST SCORE</small><strong>92</strong><span data-zh="关键叙事" data-en="CRITICAL SIGNAL">关键叙事</span></div>
-      </div>
-      <div class="console-story">
-        <div><span>COMPUTE OVERCAPACITY</span><time>08:42 UTC</time></div>
-        <h2 data-zh="云厂商探索出售多余 AI 算力" data-en="Hyperscaler explores selling excess AI compute">云厂商探索出售多余 AI 算力</h2>
-        <p data-zh="新事实正在改变 GPU 基础设施需求曲线。" data-en="A new fact changes the expected GPU infrastructure demand curve.">新事实正在改变 GPU 基础设施需求曲线。</p>
-      </div>
-      <div class="console-tape"><span>IMPACT</span><b class="negative">NVDA −2.8%</b><b class="negative">SMCI −3.1%</b><b class="mixed">META MIXED</b></div>
-    </div>
-  </section>
+    <main>
+      <section class="hero shell">
+        <div class="hero-copy reveal-item">
+          <div class="eyebrow">
+            <span></span
+            ><b
+              data-zh="AI 算力叙事风险雷达"
+              data-en="AI COMPUTE NARRATIVE RISK RADAR"
+              >AI 算力叙事风险雷达</b
+            >
+          </div>
+          <h1
+            data-zh="<span class='headline-nowrap'>在市场定价前，</span><em>看见鬼故事。</em>"
+            data-en="See the ghost story<br><em>before it gets priced.</em>"
+          >
+            <span class="headline-nowrap">在市场定价前，</span
+            ><em>看见鬼故事。</em>
+          </h1>
+          <p
+            class="hero-lede"
+            data-zh="从碎片新闻中识别真正会改变 AI 基础设施预期的叙事，映射受影响标的，并在反应交易日收盘后自动验证市场表现。"
+            data-en="Detect narratives that can reprice AI infrastructure, map exposed tickers, and verify the market reaction after the reaction session closes."
+          >
+            从碎片新闻中识别真正会改变 AI
+            基础设施预期的叙事，映射受影响标的，并在反应交易日收盘后自动验证市场表现。
+          </p>
+          <div class="hero-actions">
+            <a class="button primary pressable" href="/monitor"
+              ><span data-zh="打开监控台" data-en="Open monitor"
+                >打开监控台</span
+              ><b>↗</b></a
+            >
+            <a class="button secondary pressable" href="/developer"
+              ><span data-zh="查看实现方式" data-en="See how it works"
+                >查看实现方式</span
+              ><b>→</b></a
+            >
+          </div>
+          <div class="hero-trace" aria-label="Signal pipeline">
+            <span data-zh="新闻进入" data-en="News in">新闻进入</span>
+            <i><em></em></i>
+            <span data-zh="叙事评分" data-en="Narrative score">叙事评分</span>
+            <i><em></em></i>
+            <span data-zh="收盘验证" data-en="Close verified">收盘验证</span>
+          </div>
+          <div class="proof-strip">
+            <span data-zh="覆盖" data-en="TRACKING">覆盖</span>
+            <b>NVDA</b><b>META</b><b>TSM</b><b>MU</b><b>VRT</b><b>+35</b>
+          </div>
+        </div>
 
-  <section class="metric-band"><div class="shell metric-grid">
-    <div><strong>40+</strong><span data-zh="全球标的" data-en="Global tickers">全球标的</span></div>
-    <div><strong>8</strong><span data-zh="供应链层级" data-en="Supply-chain layers">供应链层级</span></div>
-    <div><strong>5×</strong><span data-zh="透明评分因子" data-en="Transparent score factors">透明评分因子</span></div>
-    <div><strong>T+0</strong><span data-zh="收盘反应回填" data-en="Close reaction backfill">收盘反应回填</span></div>
-  </div></section>
+        <div
+          class="signal-console reveal-item"
+          aria-label="Ghost signal preview"
+        >
+          <div class="console-bar">
+            <span><i></i><i></i><i></i></span
+            ><code>ghost-monitor / live-feed</code><b>● LIVE</b>
+          </div>
+          <div class="radar-panel">
+            <div class="radar-grid"></div>
+            <div class="radar-sweep"></div>
+            <div class="radar-score">
+              <small>GHOST SCORE</small><strong>92</strong
+              ><span data-zh="关键叙事" data-en="CRITICAL SIGNAL"
+                >关键叙事</span
+              >
+            </div>
+          </div>
+          <div class="console-story">
+            <div><span>COMPUTE OVERCAPACITY</span><time>08:42 UTC</time></div>
+            <h2
+              data-zh="云厂商探索出售多余 AI 算力"
+              data-en="Hyperscaler explores selling excess AI compute"
+            >
+              云厂商探索出售多余 AI 算力
+            </h2>
+            <p
+              data-zh="新事实正在改变 GPU 基础设施需求曲线。"
+              data-en="A new fact changes the expected GPU infrastructure demand curve."
+            >
+              新事实正在改变 GPU 基础设施需求曲线。
+            </p>
+          </div>
+          <div class="console-routing" aria-hidden="true">
+            <span>QVERIS</span><i><em></em></i><span>SCORER</span
+            ><i><em></em></i><span>REACTION</span>
+          </div>
+          <div class="console-tape">
+            <span>IMPACT</span><b class="negative">NVDA −2.8%</b
+            ><b class="negative">SMCI −3.1%</b><b class="mixed">META MIXED</b>
+          </div>
+        </div>
+      </section>
 
-  <section class="workflow shell">
-    <div class="section-copy"><span class="section-kicker">JUDGMENT ENGINE</span><h2 data-zh="新闻是噪音。<br>方向才是情报。" data-en="News is noise.<br>Direction is intelligence.">新闻是噪音。<br>方向才是情报。</h2><p data-zh="每条候选新闻经过统一的判断管线，再进入监控台。" data-en="Every candidate story passes through the same judgment pipeline before it reaches the monitor.">每条候选新闻经过统一的判断管线，再进入监控台。</p></div>
-    <div class="workflow-grid">
-      <article><span>01</span><b>DISCOVER</b><h3 data-zh="发现能力" data-en="Discover capability">发现能力</h3><p data-zh="通过 QVeris 定位新闻、行情和数据能力。" data-en="Use QVeris to locate news, market, and data capabilities.">通过 QVeris 定位新闻、行情和数据能力。</p></article>
-      <article><span>02</span><b>CLASSIFY</b><h3 data-zh="识别叙事" data-en="Classify narrative">识别叙事</h3><p data-zh="判断可信度、新颖度、主题强度与传染范围。" data-en="Score credibility, novelty, theme strength, and contagion.">判断可信度、新颖度、主题强度与传染范围。</p></article>
-      <article><span>03</span><b>MAP</b><h3 data-zh="映射标的" data-en="Map exposure">映射标的</h3><p data-zh="把叙事翻译成各层级的利多、利空或混合影响。" data-en="Translate the narrative into bullish, bearish, or mixed exposure.">把叙事翻译成各层级的利多、利空或混合影响。</p></article>
-      <article><span>04</span><b>VERIFY</b><h3 data-zh="验证反应" data-en="Verify reaction">验证反应</h3><p data-zh="在反应交易日收盘后自动回填价格表现。" data-en="Backfill price performance after the reaction session closes.">在反应交易日收盘后自动回填价格表现。</p></article>
-    </div>
-  </section>
+      <section class="metric-band">
+        <div class="shell metric-grid">
+          <div>
+            <strong>40+</strong
+            ><span data-zh="全球标的" data-en="Global tickers">全球标的</span>
+          </div>
+          <div>
+            <strong>8</strong
+            ><span data-zh="供应链层级" data-en="Supply-chain layers"
+              >供应链层级</span
+            >
+          </div>
+          <div>
+            <strong>5×</strong
+            ><span data-zh="透明评分因子" data-en="Transparent score factors"
+              >透明评分因子</span
+            >
+          </div>
+          <div>
+            <strong>T+0</strong
+            ><span data-zh="收盘反应回填" data-en="Close reaction backfill"
+              >收盘反应回填</span
+            >
+          </div>
+        </div>
+      </section>
 
-  <section class="home-cta">
-    <div class="shell"><span class="section-kicker">OPEN SOURCE RESEARCH</span><h2 data-zh="先看信号，再看代码。" data-en="Read the signal. Then read the code.">先看信号，再看代码。</h2><p data-zh="如果这个项目对你有帮助，欢迎在 GitHub 点一个 Star。" data-en="If this project is useful, support it with a GitHub star.">如果这个项目对你有帮助，欢迎在 GitHub 点一个 Star。</p><div><a class="button dark pressable github-star" href="https://github.com/AlexLiu0130/ai-compute-ghost-monitor" target="_blank" rel="noreferrer"><span data-zh="前往 GitHub 点 Star" data-en="Star on GitHub">前往 GitHub 点 Star</span><b>★ <span class="star-count" data-star-count aria-live="polite">0</span></b></a><a class="text-link" href="/developer" data-zh="开发者文档 →" data-en="Developer story →">开发者文档 →</a></div></div>
-  </section>
-</main>
+      <section class="workflow shell">
+        <div class="section-copy">
+          <span class="section-kicker">JUDGMENT ENGINE</span>
+          <h2
+            data-zh="新闻是噪音。<br>方向才是情报。"
+            data-en="News is noise.<br>Direction is intelligence."
+          >
+            新闻是噪音。<br />方向才是情报。
+          </h2>
+          <p
+            data-zh="每条候选新闻经过统一的判断管线，再进入监控台。"
+            data-en="Every candidate story passes through the same judgment pipeline before it reaches the monitor."
+          >
+            每条候选新闻经过统一的判断管线，再进入监控台。
+          </p>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <span>01</span><b>DISCOVER</b>
+            <h3 data-zh="发现能力" data-en="Discover capability">发现能力</h3>
+            <p
+              data-zh="通过 QVeris 定位新闻、行情和数据能力。"
+              data-en="Use QVeris to locate news, market, and data capabilities."
+            >
+              通过 QVeris 定位新闻、行情和数据能力。
+            </p>
+          </article>
+          <article>
+            <span>02</span><b>CLASSIFY</b>
+            <h3 data-zh="识别叙事" data-en="Classify narrative">识别叙事</h3>
+            <p
+              data-zh="判断可信度、新颖度、主题强度与传染范围。"
+              data-en="Score credibility, novelty, theme strength, and contagion."
+            >
+              判断可信度、新颖度、主题强度与传染范围。
+            </p>
+          </article>
+          <article>
+            <span>03</span><b>MAP</b>
+            <h3 data-zh="映射标的" data-en="Map exposure">映射标的</h3>
+            <p
+              data-zh="把叙事翻译成各层级的利多、利空或混合影响。"
+              data-en="Translate the narrative into bullish, bearish, or mixed exposure."
+            >
+              把叙事翻译成各层级的利多、利空或混合影响。
+            </p>
+          </article>
+          <article>
+            <span>04</span><b>VERIFY</b>
+            <h3 data-zh="验证反应" data-en="Verify reaction">验证反应</h3>
+            <p
+              data-zh="在反应交易日收盘后自动回填价格表现。"
+              data-en="Backfill price performance after the reaction session closes."
+            >
+              在反应交易日收盘后自动回填价格表现。
+            </p>
+          </article>
+        </div>
+      </section>
 
-<footer class="site-footer shell"><a class="site-brand" href="/"><span class="signal-dot"></span><span>GHOST <em>MONITOR</em></span></a><p data-zh="AI 算力叙事情报 · 研究工具，非投资建议" data-en="AI compute narrative intelligence · Research only, not investment advice">AI 算力叙事情报 · 研究工具，非投资建议</p><span>© 2026 · MIT</span></footer>
-<script src="site.js"></script>
-</body>
+      <section class="home-cta">
+        <div class="shell">
+          <span class="section-kicker">OPEN SOURCE RESEARCH</span>
+          <h2
+            data-zh="先看信号，再看代码。"
+            data-en="Read the signal. Then read the code."
+          >
+            先看信号，再看代码。
+          </h2>
+          <p
+            data-zh="如果这个项目对你有帮助，欢迎在 GitHub 点一个 Star。"
+            data-en="If this project is useful, support it with a GitHub star."
+          >
+            如果这个项目对你有帮助，欢迎在 GitHub 点一个 Star。
+          </p>
+          <div>
+            <a
+              class="button dark pressable github-star"
+              href="https://github.com/AlexLiu0130/ai-compute-ghost-monitor"
+              target="_blank"
+              rel="noreferrer"
+              ><span data-zh="前往 GitHub 点 Star" data-en="Star on GitHub"
+                >前往 GitHub 点 Star</span
+              ><b
+                >★
+                <span class="star-count" data-star-count aria-live="polite"
+                  >0</span
+                ></b
+              ></a
+            ><a
+              class="text-link"
+              href="/developer"
+              data-zh="开发者文档 →"
+              data-en="Developer story →"
+              >开发者文档 →</a
+            >
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer shell">
+      <a class="site-brand" href="/"
+        ><span class="signal-dot"></span><span>GHOST <em>MONITOR</em></span></a
+      >
+      <p
+        data-zh="AI 算力叙事情报 · 研究工具，非投资建议"
+        data-en="AI compute narrative intelligence · Research only, not investment advice"
+      >
+        AI 算力叙事情报 · 研究工具，非投资建议
+      </p>
+      <span>© 2026 · MIT</span>
+    </footer>
+    <script src="site.js"></script>
+  </body>
 </html>
