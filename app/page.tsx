@@ -12,7 +12,7 @@ export default function Home() {
       <nav className="nav shell" aria-label="Main navigation">
         <a className="brand" href="#top" aria-label="Ghost Monitor home"><span className="brandMark">G</span><span>GHOST<br />MONITOR</span></a>
         <div className="navLinks"><a href="#how">How it works</a><a href="#signals">Live signals</a><a href="#coverage">Coverage</a></div>
-        <a className="navCta" href="#signals">Open monitor <span>↗</span></a>
+        <a className="navCta" href="http://127.0.0.1:8765" target="_blank" rel="noreferrer">Open monitor <span>↗</span></a>
       </nav>
 
       <section className="hero shell" id="top">
@@ -66,7 +66,7 @@ export default function Home() {
         <div className="layerMap">{layers.map((x,i) => <div key={x}><span>0{i+1}</span><b>{x}</b><em>{["META · MSFT · GOOGL · AMZN", "NVDA · AMD · AVGO · ANET", "MU · SK HYNIX · SAMSUNG", "TSM · ASML · AMAT · LRCX", "SMCI · DELL · HPE", "VRT · ETN · CEG · PWR"][i]}</em></div>)}</div>
       </section>
 
-      <section className="cta"><div className="shell"><span className="kicker">FROM HEADLINE TO EXPOSURE MAP</span><h2>Stop tracking news.<br /><em>Start tracking narrative risk.</em></h2><a className="primary lightBtn" href="#top">Launch Ghost Monitor <span>↗</span></a></div></section>
+      <section className="cta"><div className="shell"><span className="kicker">FROM HEADLINE TO EXPOSURE MAP</span><h2>Stop tracking news.<br /><em>Start tracking narrative risk.</em></h2><a className="primary lightBtn" href="http://127.0.0.1:8765" target="_blank" rel="noreferrer">Launch Ghost Monitor <span>↗</span></a></div></section>
       <footer className="footer shell"><div className="brand"><span className="brandMark">G</span><span>GHOST<br />MONITOR</span></div><p>AI compute narrative intelligence.<br />Built for research, not prediction.</p><span>© 2026 · MIT LICENSE</span></footer>
     </main>
   );
