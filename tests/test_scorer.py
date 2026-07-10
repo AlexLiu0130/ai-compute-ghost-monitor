@@ -5,7 +5,7 @@ from pathlib import Path
 from ghost_monitor.scorer import analyze
 from ghost_monitor.scorer import normalize_ghost_score
 from ghost_monitor.firecrawl_client import is_bad_markdown
-from ghost_monitor.server import _capture_queries, _next_capture_mode
+from ghost_monitor.server import _capture_queries, _is_live_signal, _next_capture_mode
 from ghost_monitor.backfill_history import case_from_analysis
 from ghost_monitor.market_impact import latest_available_trading_day
 from ghost_monitor.translator import cache_key, translation_needed
@@ -81,6 +81,21 @@ class ScorerTest(unittest.TestCase):
         key = cache_key(row["title"], row["summary"])
         self.assertTrue(translation_needed(row, {key: {"title_zh": "", "summary_zh": ""}}))
         self.assertFalse(translation_needed(row, {key: {"title_zh": "AI 算力警告", "summary_zh": "需求可能走弱。"}}))
+
+    def test_live_signal_filter_rejects_old_market_recaps(self):
+        now = datetime.fromisoformat("2026-07-10T09:00:00+00:00")
+        recap = {
+            "title": "Mark Zuckerberg's Meta Is Entering What Could Be a $2 Trillion Cloud Market. CoreWeave Stock Fell 14% on the News.",
+            "summary": "CoreWeave is at risk of losing a customer and gaining a competitor.",
+            "published_at": "2026-07-08T18:46:00Z",
+        }
+        fresh = {
+            "title": "Meta reportedly plans a new AI cloud compute offering",
+            "summary": "The move could pressure GPU leasing margins.",
+            "published_at": "2026-07-10T06:00:00Z",
+        }
+        self.assertFalse(_is_live_signal(recap, now=now))
+        self.assertTrue(_is_live_signal(fresh, now=now))
 
 
 if __name__ == "__main__":

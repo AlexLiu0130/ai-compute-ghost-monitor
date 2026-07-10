@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 import urllib.parse
@@ -34,6 +35,20 @@ COMPUTE_TERMS = (
     "amd", "broadcom", "micron", "sk hynix", "samsung", "tsmc",
 )
 UNIVERSE_SYMBOLS = {s for xs in LAYERS.values() for s in xs}
+LIVE_SIGNAL_MAX_AGE_HOURS = 36
+POST_HOC_MARKET_MOVE_PATTERNS = [
+    re.compile(pattern, re.I)
+    for pattern in [
+        r"\bwhy\b.{0,80}\b(stock|shares)\b",
+        r"\bwhat\s+happened\b",
+        r"\b(stock|shares)\b.{0,80}\b(fell|dropped|plunged|slumped|tumbled|declined|lost|rose|jumped|surged|soared)\b",
+        r"\b(fell|dropped|plunged|slumped|tumbled|declined|lost|rose|jumped|surged|soared)\s+\d+(\.\d+)?%",
+        r"\b(on|after)\s+the\s+news\b",
+        r"为什么.{0,24}(下跌|上涨|暴跌|大涨)",
+        r"(暴跌|大涨|下跌|上涨).{0,24}(原因|发生了什么)",
+        r"股价.{0,24}(下跌|上涨|暴跌|大涨)",
+    ]
+]
 
 
 def _case_key(row: dict) -> str:
@@ -72,6 +87,24 @@ def _sort_time(value: str) -> float:
         return datetime.fromisoformat(raw if "T" in raw else f"{raw}T00:00:00").timestamp()
     except Exception:
         return 0
+
+
+def _is_fresh_signal(row: dict, now: datetime | None = None, max_hours: int = LIVE_SIGNAL_MAX_AGE_HOURS) -> bool:
+    ts = _sort_time(row.get("published_at", ""))
+    if not ts:
+        return False
+    current = now or datetime.now(timezone.utc)
+    age_hours = (current.timestamp() - ts) / 3600
+    return -2 <= age_hours <= max_hours
+
+
+def _is_post_hoc_market_recap(row: dict) -> bool:
+    text = f"{row.get('title', '')} {row.get('summary', '')} {row.get('title_zh', '')} {row.get('summary_zh', '')}"
+    return any(pattern.search(text) for pattern in POST_HOC_MARKET_MOVE_PATTERNS)
+
+
+def _is_live_signal(row: dict, now: datetime | None = None) -> bool:
+    return _is_fresh_signal(row, now=now) and not _is_post_hoc_market_recap(row)
 
 
 def _quote(symbol: str) -> dict:
@@ -220,6 +253,7 @@ def _load_alerts() -> list[dict]:
             if row["ghost_type"] != "ordinary_ai_news" and row["alert_level"] != "log":
                 rows.append(row)
 
+    rows = [row for row in rows if _is_live_signal(row)]
     rows.sort(key=lambda row: _sort_time(row.get("published_at", "")), reverse=True)
     _attach_impacts(rows)
     try:
