@@ -35,7 +35,7 @@ COMPUTE_TERMS = (
     "amd", "broadcom", "micron", "sk hynix", "samsung", "tsmc",
 )
 UNIVERSE_SYMBOLS = {s for xs in LAYERS.values() for s in xs}
-LIVE_SIGNAL_MAX_AGE_HOURS = 36
+DISPLAY_LOOKBACK_DAYS = 366
 POST_HOC_MARKET_MOVE_PATTERNS = [
     re.compile(pattern, re.I)
     for pattern in [
@@ -89,13 +89,13 @@ def _sort_time(value: str) -> float:
         return 0
 
 
-def _is_fresh_signal(row: dict, now: datetime | None = None, max_hours: int = LIVE_SIGNAL_MAX_AGE_HOURS) -> bool:
+def _is_within_display_window(row: dict, now: datetime | None = None, lookback_days: int = DISPLAY_LOOKBACK_DAYS) -> bool:
     ts = _sort_time(row.get("published_at", ""))
     if not ts:
         return False
     current = now or datetime.now(timezone.utc)
-    age_hours = (current.timestamp() - ts) / 3600
-    return -2 <= age_hours <= max_hours
+    age_days = (current.timestamp() - ts) / 86400
+    return -1 <= age_days <= lookback_days
 
 
 def _is_post_hoc_market_recap(row: dict) -> bool:
@@ -103,8 +103,8 @@ def _is_post_hoc_market_recap(row: dict) -> bool:
     return any(pattern.search(text) for pattern in POST_HOC_MARKET_MOVE_PATTERNS)
 
 
-def _is_live_signal(row: dict, now: datetime | None = None) -> bool:
-    return _is_fresh_signal(row, now=now) and not _is_post_hoc_market_recap(row)
+def _is_displayable_signal(row: dict, now: datetime | None = None) -> bool:
+    return _is_within_display_window(row, now=now) and not _is_post_hoc_market_recap(row)
 
 
 def _quote(symbol: str) -> dict:
@@ -253,7 +253,7 @@ def _load_alerts() -> list[dict]:
             if row["ghost_type"] != "ordinary_ai_news" and row["alert_level"] != "log":
                 rows.append(row)
 
-    rows = [row for row in rows if _is_live_signal(row)]
+    rows = [row for row in rows if _is_displayable_signal(row)]
     rows.sort(key=lambda row: _sort_time(row.get("published_at", "")), reverse=True)
     _attach_impacts(rows)
     try:
