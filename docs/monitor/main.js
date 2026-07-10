@@ -583,8 +583,8 @@ async function loadAlerts() {
 }
 
 async function loadCaptureStatus() {
-  $("#capture-btn").textContent = ui("每 15 分钟更新", "Updates every 15m");
-  $("#capture-btn").title = ui("GitHub Actions 自动刷新最新信号", "GitHub Actions refreshes live signals");
+  $("#capture-btn").textContent = ui("刷新数据", "Refresh data");
+  $("#capture-btn").title = ui("重新载入已部署的最新信号", "Reload the latest deployed signals");
 }
 
 /* ---------- events ---------- */
