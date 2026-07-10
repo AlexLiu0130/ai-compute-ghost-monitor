@@ -11,7 +11,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from .market_impact import impact_for
+from .market_impact import impact_for, latest_available_trading_day
 from .qveris_client import alpha_vantage_news, load_env, ssl_context
 from .scorer import analyze, level_for_score, normalize_ghost_score
 from .translator import apply_translation, load_cache, translate_rows
@@ -145,14 +145,17 @@ def _missing_impact(row: dict) -> bool:
     impacts = row.get("market_impact") or []
     if not impacts:
         return True
-    yesterday = (datetime.utcnow().date() - timedelta(days=1)).isoformat()
-    if any(x.get("pending") and x.get("expected_reaction_date", "9999-99-99") <= yesterday for x in impacts):
+    available = latest_available_trading_day().isoformat()
+    if any(x.get("pending") and x.get("expected_reaction_date", "9999-99-99") <= available for x in impacts):
         return True
     return not any(x.get("reaction_pct") is not None or x.get("event_day_pct") is not None or x.get("next_day_pct") is not None for x in impacts)
 
 
-def _attach_impacts(rows: list[dict]) -> None:
+def _attach_impacts(rows: list[dict], max_rows: int = 24) -> int:
+    refreshed = 0
     for row in rows:
+        if refreshed >= max_rows:
+            break
         if not _missing_impact(row):
             continue
         event_date = row.get("published_at") or ""
@@ -161,6 +164,8 @@ def _attach_impacts(rows: list[dict]) -> None:
         symbols = list((row.get("ticker_directions") or {}).keys())[:8]
         if symbols:
             row["market_impact"] = [impact_for(symbol, event_date) for symbol in symbols]
+            refreshed += 1
+    return refreshed
 
 
 def _load_alerts() -> list[dict]:
@@ -211,12 +216,16 @@ def _load_alerts() -> list[dict]:
                 "symbols": item.get("symbols", []),
                 "use_llm": "cached",
             }).to_dict()
+            row["market_impact"] = item.get("market_impact") or []
             if row["ghost_type"] != "ordinary_ai_news" and row["alert_level"] != "log":
                 rows.append(row)
 
     rows.sort(key=lambda row: _sort_time(row.get("published_at", "")), reverse=True)
     _attach_impacts(rows)
-    translations = load_cache()
+    try:
+        translations = translate_rows(rows[:80])
+    except Exception:
+        translations = load_cache()
     rows = [_enrich(row, translations) for row in rows]
     price_symbols = []
     for row in rows[:15]:
@@ -310,12 +319,14 @@ def capture_latest(mode: str = "full") -> dict:
     except Exception:
         pass
     merged = old + [r for r in rows if (r.get("url") or r.get("title")) not in stored_seen]
-    AUTO_CAPTURE.write_text(json.dumps(merged[-200:], indent=2, ensure_ascii=False))
+    stored = merged[-200:]
+    _attach_impacts(sorted(stored, key=lambda row: _sort_time(row.get("published_at", "")), reverse=True), max_rows=12)
+    AUTO_CAPTURE.write_text(json.dumps(stored, indent=2, ensure_ascii=False))
     AUTO_SEEN.write_text(json.dumps(sorted(seen)[-5000:], indent=2, ensure_ascii=False))
     status = {
         "fetched": len(articles),
         "captured": len(rows),
-        "stored": len(merged[-200:]),
+        "stored": len(stored),
         "mode": mode,
         "errors": errors[:3],
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -359,13 +370,20 @@ class Handler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(WEB), **kwargs)
 
     def do_GET(self):
-        if urlparse(self.path).path == "/api/alerts":
+        path = urlparse(self.path).path
+        if path.rstrip("/") == "/monitor":
+            self.path = "/monitor.html"
+            return super().do_GET()
+        if path.rstrip("/") == "/developer":
+            self.path = "/developer.html"
+            return super().do_GET()
+        if path == "/api/alerts":
             now = time.time()
             if ALERTS_CACHE["rows"] is None or now - ALERTS_CACHE["ts"] >= ALERTS_TTL:
                 ALERTS_CACHE.update(ts=now, rows=_load_alerts())
             self._json(ALERTS_CACHE["rows"])
             return
-        if urlparse(self.path).path == "/api/capture/status":
+        if path == "/api/capture/status":
             status = DATA / "auto_capture_status.json"
             self._json(json.loads(status.read_text()) if status.exists() else {"status": "pending"})
             return

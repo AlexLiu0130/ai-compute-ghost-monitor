@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Ghost Monitor 如何通过 QVeris 构建新闻发现、工具调用与市场验证管线。" />
+<title>Developers — Ghost Monitor × QVeris</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+<link rel="stylesheet" href="site.css" />
+</head>
+<body class="developer-page">
+<div class="scanlines" aria-hidden="true"></div>
+<header class="site-nav shell">
+  <a class="site-brand" href="./"><span class="signal-dot"></span><span>GHOST <em>MONITOR</em></span></a>
+  <nav class="site-links" aria-label="Primary"><a href="./" data-zh="首页" data-en="Home">首页</a><a href="./monitor/" data-zh="监控台" data-en="Monitor">监控台</a><a class="active" href="./developer.html" data-zh="开发者" data-en="Developers">开发者</a></nav>
+  <div class="site-actions"><button class="language-toggle" type="button" aria-label="Switch language">EN</button><a class="nav-star pressable" href="https://qveris.ai/" target="_blank" rel="noreferrer"><span>QVeris</span><b>↗</b></a></div>
+</header>
+
+<main>
+  <section class="developer-hero shell">
+    <div class="eyebrow"><span></span><b>GHOST MONITOR × QVERIS</b></div>
+    <h1 data-zh="让 Agent 从现实世界<br><em>取得可验证的数据。</em>" data-en="Give agents verifiable<br><em>real-world data.</em>">让 Agent 从现实世界<br><em>取得可验证的数据。</em></h1>
+    <p data-zh="Ghost Monitor 没有为每个数据源硬编码一套集成。我们通过 QVeris 的 Discover → Inspect → Call 协议发现、检查并调用新闻与市场能力，再把结果送入叙事判断和行情验证管线。" data-en="Ghost Monitor does not hardcode a separate integration for every provider. It uses QVeris Discover → Inspect → Call to find, inspect, and execute news and market capabilities before narrative scoring and price validation.">Ghost Monitor 没有为每个数据源硬编码一套集成。我们通过 QVeris 的 Discover → Inspect → Call 协议发现、检查并调用新闻与市场能力，再把结果送入叙事判断和行情验证管线。</p>
+    <div class="hero-actions"><a class="button qveris pressable" href="https://qveris.ai/" target="_blank" rel="noreferrer"><span data-zh="开始使用 QVeris" data-en="Start with QVeris">开始使用 QVeris</span><b>↗</b></a><a class="button secondary pressable" href="https://qveris.ai/docs" target="_blank" rel="noreferrer"><span data-zh="阅读官方文档" data-en="Read the docs">阅读官方文档</span><b>→</b></a></div>
+  </section>
+
+  <section class="protocol shell">
+    <div class="protocol-line"><span>AGENT</span><i></i><span>QVERIS ROUTER</span><i></i><span>10,000+ CAPABILITIES</span></div>
+    <div class="protocol-grid">
+      <article><span>01 · FREE</span><h2>Discover</h2><p data-zh="用自然语言描述所需能力，返回按相关性排序的候选工具，以及成本、延迟与成功率信号。" data-en="Describe a capability in natural language and receive ranked tools with cost, latency, and success-rate signals.">用自然语言描述所需能力，返回按相关性排序的候选工具，以及成本、延迟与成功率信号。</p><code>POST /api/v1/search</code></article>
+      <article><span>02 · FREE</span><h2>Inspect</h2><p data-zh="在调用前读取完整参数结构、示例、计费规则和质量指标，避免盲目执行。" data-en="Read full parameter schemas, examples, billing rules, and quality signals before execution.">在调用前读取完整参数结构、示例、计费规则和质量指标，避免盲目执行。</p><code>POST /api/v1/tools/by-ids</code></article>
+      <article><span>03 · CALL</span><h2>Call</h2><p data-zh="用统一协议执行选中的能力，获得结构化结果、execution ID 和可审计的费用信息。" data-en="Execute the selected capability through one protocol and receive structured output, an execution ID, and auditable billing.">用统一协议执行选中的能力，获得结构化结果、execution ID 和可审计的费用信息。</p><code>POST /api/v1/tools/execute</code></article>
+    </div>
+  </section>
+
+  <section class="implementation shell">
+    <div class="section-copy"><span class="section-kicker">IMPLEMENTATION</span><h2 data-zh="一条新闻如何变成<br>一张信号卡片。" data-en="How a headline becomes<br>a signal card.">一条新闻如何变成<br>一张信号卡片。</h2><p data-zh="这不是一个黑盒预测器，而是一条可追踪的研究流水线。" data-en="This is a traceable research pipeline, not a black-box predictor.">这不是一个黑盒预测器，而是一条可追踪的研究流水线。</p></div>
+    <ol class="implementation-list">
+      <li><b>01</b><div><span data-zh="采集新闻" data-en="Capture news">采集新闻</span><p data-zh="QVeris 调用 Alpha Vantage 与 Finnhub 能力，按全局、核心标的和完整 universe 分层抓取。" data-en="QVeris calls Alpha Vantage and Finnhub capabilities in global, core-ticker, and full-universe tiers.">QVeris 调用 Alpha Vantage 与 Finnhub 能力，按全局、核心标的和完整 universe 分层抓取。</p></div><code>qveris_client.py</code></li>
+      <li><b>02</b><div><span data-zh="翻译与分类" data-en="Translate and classify">翻译与分类</span><p data-zh="翻译缓存保证中英文一致；规则与大模型共同判断鬼故事类型、可信度与强度。" data-en="A translation cache keeps language consistent while rules and an LLM classify type, credibility, and strength.">翻译缓存保证中英文一致；规则与大模型共同判断鬼故事类型、可信度与强度。</p></div><code>translator.py · scorer.py</code></li>
+      <li><b>03</b><div><span data-zh="映射产业链" data-en="Map the supply chain">映射产业链</span><p data-zh="从云厂商、芯片、晶圆、内存、服务器、算力租赁到电力与 ETF，逐层给出方向。" data-en="Map directional exposure across cloud, chips, foundry, memory, servers, compute leasing, power, and ETFs.">从云厂商、芯片、晶圆、内存、服务器、算力租赁到电力与 ETF，逐层给出方向。</p></div><code>universe.py · rules.py</code></li>
+      <li><b>04</b><div><span data-zh="回填市场反应" data-en="Backfill market reaction">回填市场反应</span><p data-zh="反应交易日收盘后拉取日线，计算前收、反应收盘、次日与三交易日表现。" data-en="After the reaction session closes, fetch daily bars and calculate prior close, reaction close, next day, and three-session performance.">反应交易日收盘后拉取日线，计算前收、反应收盘、次日与三交易日表现。</p></div><code>market_impact.py</code></li>
+    </ol>
+  </section>
+
+  <section class="capability-band"><div class="shell"><span class="section-kicker">WHY QVERIS</span><h2 data-zh="一个 API Key，连接现实世界能力。" data-en="One API key for real-world capabilities.">一个 API Key，连接现实世界能力。</h2><div class="capability-grid"><div><strong>10,000+</strong><span data-zh="已验证能力" data-en="Verified capabilities">已验证能力</span></div><div><strong>FREE</strong><span data-zh="发现与检查" data-en="Discover & inspect">发现与检查</span></div><div><strong>REST · SDK · MCP · CLI</strong><span data-zh="多种接入方式" data-en="Multiple interfaces">多种接入方式</span></div><div><strong>AUDITABLE</strong><span data-zh="调用与费用可追踪" data-en="Traceable calls & billing">调用与费用可追踪</span></div></div><a class="button qveris pressable" href="https://qveris.ai/" target="_blank" rel="noreferrer"><span data-zh="探索 QVeris 能力" data-en="Explore QVeris capabilities">探索 QVeris 能力</span><b>↗</b></a></div></section>
+</main>
+
+<footer class="site-footer shell"><a class="site-brand" href="./"><span class="signal-dot"></span><span>GHOST <em>MONITOR</em></span></a><p data-zh="由 QVeris 能力路由提供现实世界数据连接" data-en="Real-world data connectivity powered by QVeris capability routing">由 QVeris 能力路由提供现实世界数据连接</p><span>© 2026 · MIT</span></footer>
+<script src="site.js"></script>
+</body>
+</html>

@@ -7,6 +7,8 @@ from ghost_monitor.scorer import normalize_ghost_score
 from ghost_monitor.firecrawl_client import is_bad_markdown
 from ghost_monitor.server import _capture_queries, _next_capture_mode
 from ghost_monitor.backfill_history import case_from_analysis
+from ghost_monitor.market_impact import latest_available_trading_day
+from ghost_monitor.translator import cache_key, translation_needed
 from datetime import datetime
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -69,6 +71,16 @@ class ScorerTest(unittest.TestCase):
         self.assertEqual(normalize_ghost_score(1), 0)
         self.assertGreaterEqual(normalize_ghost_score(81), 60)
         self.assertEqual(normalize_ghost_score(243), 100)
+
+    def test_reaction_bar_becomes_available_after_market_close(self):
+        self.assertEqual(latest_available_trading_day(datetime(2026, 7, 10, 20, 59)).isoformat(), "2026-07-09")
+        self.assertEqual(latest_available_trading_day(datetime(2026, 7, 10, 21, 1)).isoformat(), "2026-07-10")
+
+    def test_empty_translation_cache_entry_is_retried(self):
+        row = {"title": "AI compute warning", "summary": "Demand may weaken."}
+        key = cache_key(row["title"], row["summary"])
+        self.assertTrue(translation_needed(row, {key: {"title_zh": "", "summary_zh": ""}}))
+        self.assertFalse(translation_needed(row, {key: {"title_zh": "AI 算力警告", "summary_zh": "需求可能走弱。"}}))
 
 
 if __name__ == "__main__":

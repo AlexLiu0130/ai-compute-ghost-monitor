@@ -164,7 +164,7 @@ function titleHtml(a) {
 }
 
 function englishRaw(a) {
-  if (!a.title && !a.summary) return "";
+  if (state.lang === "en" || (!a.title && !a.summary)) return "";
   return `<details class="english-raw">
     <summary>英文原文</summary>
     ${a.title ? `<p>${esc(a.title)}</p>` : ""}
@@ -305,7 +305,8 @@ function dirSectionHtml(a) {
           ((a.symbols || []).includes(t) ? 1 : 0);
         return tickerRank(a, y) - tickerRank(a, x) || w(y) - w(x) || x.localeCompare(y);
       });
-      const core = tickers.filter(isCore).slice(0, MAX_CORE);
+      const preferred = tickers.filter(isCore);
+      const core = [...new Set([...preferred, ...tickers.slice(0, 3)])].slice(0, MAX_CORE);
       const rest = tickers.filter((t) => !core.includes(t));
       const prob = probText(groupProb(a, groups[d]));
 
@@ -314,7 +315,7 @@ function dirSectionHtml(a) {
         .map((t, i) => `<span class="pill${i >= MAX_PILLS ? " pill-extra" : ""}">${esc(t)}</span>`)
         .join("");
       const more = rest.length > MAX_PILLS
-        ? `<button type="button" class="pill pill-more">+${rest.length - MAX_PILLS} 更多</button>`
+        ? `<button type="button" class="pill pill-more">+${rest.length - MAX_PILLS} ${ui("更多", "more")}</button>`
         : "";
 
       return `<div class="dir-group">
@@ -346,7 +347,7 @@ function impactHtml(a, ticker) {
   if (!impact) return `<span class="event-impact muted">${ui("暂无事件后价格", "No post-event price")}</span>`;
   if (impact.error) return `<span class="event-impact muted">${ui("暂无事件后价格", "No post-event price")}</span>`;
   if (impact.pending) {
-    const day = impact.expected_reaction_date ? `：${impact.expected_reaction_date}` : "";
+    const day = impact.expected_reaction_date ? `${ui("：", ": ")}${impact.expected_reaction_date}` : "";
     return `<span class="event-impact muted">${ui("等待反应交易日收盘", "Waiting for reaction close")}${esc(day)}</span>`;
   }
   const close = impact.reaction_close ?? impact.event_close;
@@ -437,7 +438,7 @@ function renderDetail(a, container) {
     .join("");
 
   const published = a.published_at
-    ? parseTime(a.published_at).toLocaleString()
+    ? parseTime(a.published_at).toLocaleString(state.lang === "en" ? "en-US" : "zh-CN")
     : "";
   const url = safeUrl(a.url);
 
@@ -474,7 +475,7 @@ function renderDetail(a, container) {
 
     <details class="raw">
       <summary>${ui("原始 JSON", "Raw JSON")}</summary>
-      <pre>${esc(JSON.stringify(a, null, 2))}</pre>
+      <pre>${esc(JSON.stringify(rawView(a), null, 2))}</pre>
     </details>
     </div>`;
 
@@ -482,14 +483,8 @@ function renderDetail(a, container) {
   container.scrollTop = 0;
 }
 
-function countUp(el, target, dur = 500) {
-  if (!el || !target) return;
-  const t0 = performance.now();
-  (function tick(now) {
-    const p = Math.min(1, (now - t0) / dur);
-    el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3)));
-    if (p < 1) requestAnimationFrame(tick);
-  })(t0);
+function countUp(el, target) {
+  if (el) el.textContent = target;
 }
 
 function formatRationale(text) {
@@ -520,6 +515,16 @@ function formatRationale(text) {
     .replaceAll("memory_storage", "内存/存储");
 }
 
+function rawView(a) {
+  if (state.lang === "zh") return a;
+  const copy = { ...a };
+  delete copy.title_zh;
+  delete copy.summary_zh;
+  copy.rationale = (copy.rationale || []).filter((item) => !hasCjk(item));
+  copy.direction_reasons = Object.fromEntries(Object.entries(copy.direction_reasons || {}).filter(([, value]) => !hasCjk(value)));
+  return copy;
+}
+
 /* ---------- topbar ---------- */
 
 function renderStats() {
@@ -537,7 +542,10 @@ function renderStats() {
   $("#count-watch").parentElement.lastChild.textContent = ` ${ui("观察", "Watch")}`;
   $("#count-log").parentElement.lastChild.textContent = ` ${ui("记录", "Logs")}`;
   $("#updated-at").textContent = `${ui("更新", "Updated")} ${new Date().toLocaleTimeString()}`;
-  $("#lang-btn").textContent = state.lang === "zh" ? "中文" : "EN";
+  document.documentElement.lang = state.lang === "zh" ? "zh-CN" : "en";
+  document.title = ui("AI 算力鬼故事监控", "AI Compute Ghost Monitor");
+  $("#lang-btn").textContent = state.lang === "zh" ? "EN" : "中文";
+  $("#lang-btn").title = ui("Switch to English", "切换到中文");
   const chipCounts = { all: state.alerts.length, alert: counts.alert, watch: counts.watch, log: counts.log };
   const chipNames = { all: ui("全部", "All"), alert: ui("警报", "Alert"), watch: ui("观察", "Watch"), log: ui("记录", "Log") };
   for (const key of Object.keys(chipCounts)) {
@@ -545,6 +553,21 @@ function renderStats() {
   }
   document.querySelector('[data-view="monitor"]').textContent = ui("监控", "Monitor");
   document.querySelector('[data-view="analyze"]').textContent = ui("分析", "Analyze");
+  document.querySelectorAll(".product-links [data-zh]").forEach((node) => { node.textContent = node.dataset[state.lang]; });
+  $("#analyze-title").textContent = ui("// 单条新闻分析", "// Analyze one story");
+  $("#label-title").textContent = ui("标题", "Headline");
+  $("#label-summary").textContent = ui("摘要", "Summary");
+  $("#label-source").textContent = ui("来源", "Source");
+  $("#label-symbols").textContent = ui("标的", "Tickers");
+  $("#hint-symbols").textContent = ui("逗号分隔", "comma-separated");
+  $("#label-market").textContent = ui("市场确认 JSON", "Market confirmation JSON");
+  $("#hint-market").textContent = ui("可选", "optional");
+  $("#analyze-btn").textContent = ui("开始分析", "Analyze");
+  $("#analyze-empty").textContent = ui("结果预览", "Result preview");
+  $("#monitor-empty") && ($("#monitor-empty").textContent = ui("选择一条信号", "Select a signal"));
+  document.querySelector('#analyze-form [name="title"]').placeholder = ui("据报道 Meta 计划出售多余的 AI 算力", "Meta reportedly plans to sell excess AI compute");
+  document.querySelector('#analyze-form [name="summary"]').placeholder = ui("这条消息可能引发市场对 AI 基础设施产能过剩的担忧。", "The report may revive concerns about excess AI infrastructure capacity.");
+  document.querySelector('#analyze-form [name="source"]').placeholder = "Reuters / Bloomberg";
   $("#capture-btn").textContent = ui("自动抓取中", "Auto Capture");
 }
 
@@ -576,7 +599,7 @@ async function loadAlerts() {
     }
   } catch (err) {
     $("#live-dot").classList.add("dead");
-    $("#updated-at").textContent = "API 离线";
+    $("#updated-at").textContent = ui("数据离线", "Data offline");
   } finally {
     btn.classList.remove("spinning");
   }

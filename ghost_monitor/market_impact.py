@@ -65,10 +65,20 @@ def fetch_chart(symbol: str, start: date, end: date) -> list[dict[str, Any]]:
     return rows
 
 
+def latest_available_trading_day(now_utc: datetime | None = None) -> date:
+    now_utc = now_utc or datetime.utcnow()
+    day = now_utc.date()
+    if not is_us_trading_day(day):
+        return previous_trading_day(day)
+    # US cash close is 20:00 UTC during daylight saving time. The extra hour
+    # gives Yahoo's daily bar time to settle before we treat it as available.
+    return day if now_utc.hour >= 21 else previous_trading_day(day - timedelta(days=1))
+
+
 def stale_cache(rows: list[dict[str, Any]], end: date) -> bool:
     if not rows:
         return False
-    required = previous_trading_day(min(end, datetime.utcnow().date() - timedelta(days=1)))
+    required = previous_trading_day(min(end, latest_available_trading_day()))
     return rows[-1]["date"] < required.isoformat()
 
 

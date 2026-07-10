@@ -14,6 +14,18 @@ ROOT = Path(__file__).resolve().parents[1]
 CACHE = ROOT / "data" / "translation_cache.json"
 
 
+def has_cjk(value: str) -> bool:
+    return any("\u3400" <= char <= "\u9fff" for char in str(value or ""))
+
+
+def translation_needed(row: dict[str, Any], cache: dict[str, Any]) -> bool:
+    title, summary = row.get("title", ""), row.get("summary", "")
+    if not (title or summary) or (has_cjk(title) and (not summary or has_cjk(summary))):
+        return False
+    cached = cache.get(cache_key(title, summary)) or {}
+    return not cached.get("title_zh") or (bool(summary) and not cached.get("summary_zh"))
+
+
 def cache_key(title: str, summary: str) -> str:
     return hashlib.sha1(f"{title}\n{summary}".encode()).hexdigest()
 
@@ -44,6 +56,11 @@ def apply_translation(row: dict[str, Any], cache: dict[str, Any] | None = None) 
     if hit:
         row["title_zh"] = polish(hit.get("title_zh", ""))
         row["summary_zh"] = polish(hit.get("summary_zh", ""))
+    else:
+        if has_cjk(row.get("title", "")):
+            row["title_zh"] = polish(row.get("title", ""))
+        if has_cjk(row.get("summary", "")):
+            row["summary_zh"] = polish(row.get("summary", ""))
     return row
 
 
@@ -62,7 +79,7 @@ def translate_rows(rows: list[dict[str, Any]], batch_size: int = 20, force: bool
     missing = []
     for row in rows:
         key = cache_key(row.get("title", ""), row.get("summary", ""))
-        if (force or key not in cache) and (row.get("title") or row.get("summary")):
+        if force or translation_needed(row, cache):
             missing.append({"key": key, "title": row.get("title", ""), "summary": row.get("summary", "")})
     for i in range(0, len(missing), batch_size):
         translated = _translate_batch(missing[i:i + batch_size])
