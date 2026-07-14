@@ -585,7 +585,7 @@ async function loadAlerts() {
       </div>`).join("");
   }
   try {
-    const res = await fetch(`alerts.json?t=${Date.now()}`);
+    const res = await fetch(`/api/alerts?t=${Date.now()}`);
     if (!res.ok) throw new Error(res.status);
     state.alerts = await res.json();
     $("#live-dot").classList.remove("dead");
