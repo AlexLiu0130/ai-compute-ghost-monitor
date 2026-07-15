@@ -5,6 +5,7 @@ import { normalizeArticle } from "./ghost";
 const TOOL = "alphavantage.news_sentiment.query.v1.467a92c0";
 const TOPICS = ["technology", "financial_markets"];
 const TICKERS = "NVDA,AMD,AVGO,MRVL,INTC,QCOM,ANET,SMH,SOXX,QQQ,XLK,TSM,ASML,AMAT,LRCX,KLAC,SNPS,CDNS,META,MSFT,GOOGL,AMZN,ORCL,MU,WDC,SNDK,STX,SMCI,DELL,HPE,VRT,ETN,APH,GLW,CRWV,NBIS";
+const WRITE_BATCH = 40;
 
 type CaptureEnv = {
   DB?: D1Database;
@@ -100,15 +101,20 @@ export async function runCapture(env: CaptureEnv) {
     const key = keyOf(row);
     if (!key || seen.has(key)) return false;
     seen.add(key);
-    return row.ghost_type !== "ordinary_ai_news" || Object.keys(row.ticker_directions || {}).length;
+    if (row.ghost_type !== "ordinary_ai_news") return row.symbols?.length || row.ghost_score >= 20;
+    return row.symbols?.length && Object.keys(row.ticker_directions || {}).length;
   }), env.DEEPSEEK_API_KEY);
 
   if (rows.length) {
-    await drizzle(env.DB).insert(alerts).values(rows.map((row: any) => ({
+    const db = drizzle(env.DB);
+    const values = rows.map((row: any) => ({
       key: keyOf(row),
       payload: JSON.stringify(row),
       publishedAt: row.published_at || "",
-    }))).onConflictDoNothing();
+    }));
+    for (let i = 0; i < values.length; i += WRITE_BATCH) {
+      await db.insert(alerts).values(values.slice(i, i + WRITE_BATCH)).onConflictDoNothing();
+    }
   }
 
   return {

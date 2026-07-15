@@ -9,6 +9,7 @@ export async function POST(request: Request) {
     }
     return Response.json(await runCapture(env as unknown as Parameters<typeof runCapture>[0]));
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "capture failed" }, { status: 500 });
+    const message = error instanceof Error ? error.message.slice(0, 300) : "capture failed";
+    return Response.json({ error: message }, { status: 500 });
   }
 }
