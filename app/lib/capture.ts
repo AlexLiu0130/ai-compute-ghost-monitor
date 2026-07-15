@@ -118,7 +118,7 @@ export async function runCapture(env: CaptureEnv) {
     }
   }
 
-  return {
+  const result = {
     fetched: raw.length,
     captured: rows.length,
     stored: rows.length,
@@ -126,4 +126,29 @@ export async function runCapture(env: CaptureEnv) {
     errors,
     ts: new Date().toISOString(),
   };
+
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS capture_status (
+      id INTEGER PRIMARY KEY,
+      fetched INTEGER NOT NULL DEFAULT 0,
+      captured INTEGER NOT NULL DEFAULT 0,
+      stored INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'ready',
+      errors TEXT NOT NULL DEFAULT '[]',
+      updated_at TEXT NOT NULL DEFAULT ''
+    )
+  `).run();
+  await env.DB.prepare(`
+    INSERT INTO capture_status (id, fetched, captured, stored, status, errors, updated_at)
+    VALUES (1, ?, ?, ?, 'ready', ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      fetched = excluded.fetched,
+      captured = excluded.captured,
+      stored = excluded.stored,
+      status = excluded.status,
+      errors = excluded.errors,
+      updated_at = excluded.updated_at
+  `).bind(result.fetched, result.captured, result.stored, JSON.stringify(errors), result.ts).run();
+
+  return result;
 }
