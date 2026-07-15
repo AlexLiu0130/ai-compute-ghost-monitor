@@ -16,12 +16,29 @@ function mergeAlerts(rows: Record<string, unknown>[]) {
   const seen = new Set<string>();
   const merged = [];
   for (const row of rows) {
+    const clean = cleanAlert(row);
+    if (!shouldShow(clean)) continue;
     const key = String(row.url || row.title || "");
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    merged.push(row);
+    merged.push(clean);
   }
   return merged.sort((a, b) => sortTime(b) - sortTime(a));
+}
+
+function cleanAlert(row: Record<string, unknown>) {
+  const copy = { ...row };
+  const zh = `${copy.title_zh || ""} ${copy.summary_zh || ""}`;
+  if (zh.includes("尚未完成中文翻译") || zh.includes("ordinary ai news 信号") || zh.includes("相关 ordinary")) {
+    delete copy.title_zh;
+    delete copy.summary_zh;
+  }
+  return copy;
+}
+
+function shouldShow(row: Record<string, unknown>) {
+  if (row.ghost_type !== "ordinary_ai_news") return true;
+  return Number(row.ghost_score || 0) >= 20;
 }
 
 export async function GET() {
