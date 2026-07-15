@@ -1,0 +1,17 @@
+name: Capture news
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Ghost Monitor capture
+        run: |
+          curl --fail --show-error --silent \
+            -X POST \
+            -H "x-capture-token: ${{ secrets.CAPTURE_TOKEN }}" \
+            https://ghost.alexai-lab.com/api/capture
