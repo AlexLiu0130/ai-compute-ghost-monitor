@@ -5,7 +5,7 @@ import { normalizeArticle } from "./ghost";
 const TOOL = "alphavantage.news_sentiment.query.v1.467a92c0";
 const TOPICS = ["technology", "financial_markets"];
 const TICKERS = "NVDA,AMD,AVGO,MRVL,INTC,QCOM,ANET,SMH,SOXX,QQQ,XLK,TSM,ASML,AMAT,LRCX,KLAC,SNPS,CDNS,META,MSFT,GOOGL,AMZN,ORCL,MU,WDC,SNDK,STX,SMCI,DELL,HPE,VRT,ETN,APH,GLW,CRWV,NBIS";
-const WRITE_BATCH = 40;
+const WRITE_BATCH = 1;
 
 type CaptureEnv = {
   DB?: D1Database;
