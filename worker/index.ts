@@ -7,6 +7,8 @@ interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
   QVERIS_API_KEY?: string;
+  DEEPSEEK_API_KEY?: string;
+  CAPTURE_TOKEN?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
