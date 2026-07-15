@@ -374,7 +374,7 @@ function dayBucket(iso) {
 
 function renderFeed() {
   const rows = sortAlerts(state.alerts).filter(
-    (a) => state.filter === "all" || a.alert_level === state.filter
+    (a) => (state.lang === "en" || a.title_zh) && (state.filter === "all" || a.alert_level === state.filter)
   );
   const feed = $("#feed");
   if (!rows.length) {
