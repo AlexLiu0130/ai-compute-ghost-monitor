@@ -152,11 +152,11 @@ function sortAlerts(rows) {
 }
 
 function newsTitle(a) {
-  return state.lang === "en" ? (a.title || a.title_zh || "") : (a.title_zh || "待翻译新闻");
+  return state.lang === "en" ? (a.title || a.title_zh || "") : (a.title_zh || "中文翻译生成中");
 }
 
 function newsSummary(a) {
-  return state.lang === "en" ? (a.summary || a.summary_zh || "") : (a.summary_zh || "这条新闻已经进入监控队列，但中文翻译尚未生成。可展开英文原文查看。");
+  return state.lang === "en" ? (a.summary || a.summary_zh || "") : (a.summary_zh || "这条新闻已进入监控队列，中文翻译正在补齐。英文原文可展开查看。");
 }
 
 function titleHtml(a) {
