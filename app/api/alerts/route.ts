@@ -26,7 +26,7 @@ function mergeAlerts(rows: Record<string, unknown>[]) {
 
 export async function GET() {
   try {
-    const rows = await getDb().select().from(alerts).orderBy(desc(alerts.publishedAt)).limit(100);
+    const rows = await getDb().select().from(alerts).orderBy(desc(alerts.publishedAt)).limit(500);
     return Response.json(mergeAlerts([...seed, ...rows.map(r => JSON.parse(r.payload))]));
   } catch {
     return Response.json(seed);
