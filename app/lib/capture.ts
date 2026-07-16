@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { alerts } from "../../db/schema";
-import { normalizeArticle } from "./ghost";
+import { applySemanticJudgment, normalizeArticle } from "./ghost";
 
 const TOOL = "alphavantage.news_sentiment.query.v1.467a92c0";
 const TOPICS = ["technology", "financial_markets"];
@@ -21,6 +21,46 @@ function keyOf(row: any) {
 function needsTranslation(row: any) {
   const text = `${row.title_zh || ""} ${row.summary_zh || ""}`;
   return !row.title_zh || !row.summary_zh || text.includes("尚未完成中文翻译") || text.includes("ordinary ai news 信号");
+}
+
+function needsSemanticReview(row: any) {
+  const text = `${row.title || ""} ${row.summary || ""}`.toLowerCase();
+  return row.symbols?.length || /\b(ai|chip|gpu|hbm|compute|semiconductor|memory|data center)\b/.test(text);
+}
+
+async function judgeRows(rows: any[], key?: string) {
+  if (!key) return rows;
+  // ponytail: cap LLM review to newest 120 candidates; widen only if recall is still measurably poor.
+  const pending = rows.filter(needsSemanticReview).slice(0, 120);
+  const types = "compute_overcapacity, capex_roi_doubt, order_inventory_weakness, hbm_shortage, capacity_flood, data_center_delay, financing_stress, capital_markets_memory, export_regulatory, ordinary_ai_news";
+  for (let offset = 0; offset < pending.length; offset += 25) {
+    const batch = pending.slice(offset, offset + 25);
+    try {
+      const response = await fetch("https://api.deepseek.com/chat/completions", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          temperature: 0,
+          response_format: { type: "json_object" },
+          messages: [{
+            role: "user",
+            content: `Classify AI compute market news semantically for a trader alert monitor. Valid ghost_type values: ${types}. strength: 0=no market event/listicle/fund holding, 1=weak mention, 2=meaningful sector event, 3=urgent/market-moving event. Fund holdings, price targets, generic stock-pick/listicle articles should be ordinary_ai_news strength 0 unless they contain a real supply/demand/capex/regulatory/order event. Return strict JSON {"items":[{"i":0,"ghost_type":"...","strength":0,"reason":"short English reason"}]}.\n${JSON.stringify(batch.map((r, i) => ({ i, title: r.title, summary: r.summary, source: r.source, symbols: r.symbols, rule_type: r.ghost_type, rule_score: r.ghost_score })))}`
+          }],
+        }),
+      });
+      if (!response.ok) throw new Error(`DeepSeek HTTP ${response.status}`);
+      const payload = await response.json() as any;
+      const data = JSON.parse(payload.choices?.[0]?.message?.content || "{}");
+      for (const item of data.items || []) {
+        const row = batch[item.i];
+        if (row) applySemanticJudgment(row, item);
+      }
+    } catch {
+      // Rules remain the fallback if semantic review is unavailable.
+    }
+  }
+  return rows;
 }
 
 async function translateRows(rows: any[], key?: string) {
@@ -95,7 +135,8 @@ export async function runCapture(env: CaptureEnv) {
   if (!raw.length && errors.length) throw new Error(errors.join("; "));
 
   const seen = new Set<string>();
-  const rows = await translateRows(raw.map(normalizeArticle).filter((row: any) => {
+  const judged = await judgeRows(raw.map(normalizeArticle), env.DEEPSEEK_API_KEY);
+  const rows = await translateRows(judged.filter((row: any) => {
     const key = keyOf(row);
     if (!key || seen.has(key)) return false;
     seen.add(key);
