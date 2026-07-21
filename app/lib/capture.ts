@@ -192,7 +192,18 @@ export async function runCapture(env: CaptureEnv) {
     try {
       raw.push(...await fetchFeed(env, { function: "NEWS_SENTIMENT", tickers: batch.join(","), sort: "LATEST", limit: "1000" }));
     } catch (error) {
-      errors.push(`tickers:${batch.join(",")}:${error instanceof Error ? error.message : "failed"}`);
+      if (batch.length <= 5) {
+        errors.push(`tickers:${batch.join(",")}:${error instanceof Error ? error.message : "failed"}`);
+        continue;
+      }
+      for (let split = 0; split < batch.length; split += 5) {
+        const fallback = batch.slice(split, split + 5);
+        try {
+          raw.push(...await fetchFeed(env, { function: "NEWS_SENTIMENT", tickers: fallback.join(","), sort: "LATEST", limit: "1000" }));
+        } catch (fallbackError) {
+          errors.push(`tickers:${fallback.join(",")}:${fallbackError instanceof Error ? fallbackError.message : "failed"}`);
+        }
+      }
     }
   }
   if (!raw.length && errors.length) throw new Error(errors.join("; "));
