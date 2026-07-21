@@ -10,6 +10,7 @@ import { scoreEvent, shouldCritique } from "./scoring";
 const TOOL = "alphavantage.news_sentiment.query.v1.467a92c0";
 const TOPICS = ["technology", "financial_markets"];
 const TICKERS = "NVDA,AMD,AVGO,MRVL,INTC,QCOM,ANET,SMH,SOXX,QQQ,XLK,TSM,ASML,AMAT,LRCX,KLAC,SNPS,CDNS,META,MSFT,GOOGL,AMZN,ORCL,MU,WDC,SNDK,STX,SMCI,DELL,HPE,VRT,ETN,APH,GLW,CRWV,NBIS";
+const TICKER_BATCH_SIZE = 10;
 const WRITE_BATCH = 1;
 const AGENT_CANDIDATE_LIMIT = 24;
 const AGENT_CONCURRENCY = 6;
@@ -146,8 +147,10 @@ async function fetchFeed(env: CaptureEnv, parameters: Record<string, string>) {
     body: JSON.stringify({ tool_id: TOOL, parameters }),
   });
   if (!response.ok) throw new Error(`QVeris HTTP ${response.status}`);
-  const payload = await response.json() as { result?: { data?: { feed?: unknown[] }; content?: { feed?: unknown[] }; full_content_file_url?: string; truncated_content?: string } };
+  const payload = await response.json() as { result?: { data?: { feed?: unknown[]; Information?: string }; content?: { feed?: unknown[] }; full_content_file_url?: string; truncated_content?: string } };
   let content = payload.result?.data || payload.result?.content || {};
+  const providerInformation = "Information" in content ? content.Information : undefined;
+  if (typeof providerInformation === "string" && providerInformation) throw new Error(providerInformation.slice(0, 160));
   if (!content.feed && payload.result?.full_content_file_url) {
     try {
       const full = await fetch(payload.result.full_content_file_url, { signal: AbortSignal.timeout(10_000) });
@@ -183,10 +186,14 @@ export async function runCapture(env: CaptureEnv) {
       errors.push(`topic:${topic}:${error instanceof Error ? error.message : "failed"}`);
     }
   }
-  try {
-    raw.push(...await fetchFeed(env, { function: "NEWS_SENTIMENT", tickers: TICKERS, sort: "LATEST", limit: "1000" }));
-  } catch (error) {
-    errors.push(`tickers:${error instanceof Error ? error.message : "failed"}`);
+  const tickerList = TICKERS.split(",");
+  for (let offset = 0; offset < tickerList.length; offset += TICKER_BATCH_SIZE) {
+    const batch = tickerList.slice(offset, offset + TICKER_BATCH_SIZE);
+    try {
+      raw.push(...await fetchFeed(env, { function: "NEWS_SENTIMENT", tickers: batch.join(","), sort: "LATEST", limit: "1000" }));
+    } catch (error) {
+      errors.push(`tickers:${batch.join(",")}:${error instanceof Error ? error.message : "failed"}`);
+    }
   }
   if (!raw.length && errors.length) throw new Error(errors.join("; "));
 
