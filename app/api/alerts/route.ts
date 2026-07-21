@@ -44,7 +44,7 @@ function shouldShow(row: Record<string, unknown>) {
 export async function GET() {
   try {
     if (!env.DB) throw new Error("D1 binding unavailable");
-    const result = await env.DB.prepare("SELECT payload FROM alerts ORDER BY published_at DESC LIMIT 500").all<{ payload: string }>();
+    const result = await env.DB.prepare("SELECT payload FROM alerts ORDER BY published_at DESC LIMIT 2000").all<{ payload: string }>();
     const rows = result.results || [];
     const stored = rows.flatMap((row) => {
       try {

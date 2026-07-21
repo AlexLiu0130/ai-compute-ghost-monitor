@@ -203,6 +203,14 @@ export async function runHistoryBatch(env: CaptureEnv, limit = 12) {
       ON CONFLICT(key) DO UPDATE SET processed_at = excluded.processed_at, score = excluded.score, status = excluded.status`)
       .bind(keyOf(row), now, Number(row.ghost_score || 0), String(row.analysis_method || "unknown")).run();
   }
+  const aggregate = await env.DB.prepare(`SELECT
+    COUNT(*) AS processed,
+    SUM(CASE WHEN score >= 65 THEN 1 ELSE 0 END) AS alert,
+    SUM(CASE WHEN score >= 35 AND score < 65 THEN 1 ELSE 0 END) AS watch,
+    SUM(CASE WHEN score < 35 THEN 1 ELSE 0 END) AS log
+    FROM history_reprocess`).first<{ processed: number; alert: number; watch: number; log: number }>();
+  const methods = await env.DB.prepare("SELECT status, COUNT(*) AS count FROM history_reprocess GROUP BY status")
+    .all<{ status: string; count: number }>();
   return {
     processed: translated.length,
     remaining: Math.max(0, pending.length - translated.length),
@@ -210,6 +218,8 @@ export async function runHistoryBatch(env: CaptureEnv, limit = 12) {
     alert: translated.filter((row) => row.alert_level === "alert").length,
     watch: translated.filter((row) => row.alert_level === "watch").length,
     fallback: translated.filter((row) => row.analysis_method === "rules_fallback").length,
+    aggregate,
+    methods: Object.fromEntries((methods.results || []).map((row) => [row.status, row.count])),
     ts: now,
   };
 }
