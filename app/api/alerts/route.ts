@@ -46,7 +46,15 @@ function shouldShow(row: Record<string, unknown>) {
 export async function GET() {
   try {
     const rows = await getDb().select().from(alerts).orderBy(desc(alerts.publishedAt)).limit(500);
-    return Response.json(mergeAlerts([...rows.map(r => JSON.parse(r.payload)), ...seed]));
+    const stored = rows.flatMap((row) => {
+      try {
+        const parsed = JSON.parse(row.payload);
+        return parsed && typeof parsed === "object" ? [parsed as Record<string, unknown>] : [];
+      } catch {
+        return [];
+      }
+    });
+    return Response.json(mergeAlerts([...stored, ...seed]));
   } catch {
     return Response.json(mergeAlerts(seed));
   }

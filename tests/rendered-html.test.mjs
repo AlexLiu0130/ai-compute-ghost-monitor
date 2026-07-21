@@ -20,3 +20,10 @@ test("monitor does not present legacy probabilities as forecasts", async () => {
   assert.match(source, /not a price probability/);
   assert.match(await readFile(alertsRoute, "utf8"), /delete copy\.ml_predictions/);
 });
+
+test("one malformed stored alert cannot force the entire API back to seed data", async () => {
+  const source = await readFile(alertsRoute, "utf8");
+  assert.match(source, /rows\.flatMap/);
+  assert.match(source, /JSON\.parse\(row\.payload\)/);
+  assert.match(source, /catch \{\s*return \[\];/);
+});
