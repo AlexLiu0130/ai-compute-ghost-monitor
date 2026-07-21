@@ -13,6 +13,7 @@
     "test:scoring": "node --test tests/ghost-rules.test.mjs tests/scoring-agent.test.mjs tests/historical-evaluation.test.mjs tests/rendered-html.test.mjs",
     "eval:scoring": "node scripts/evaluate-scoring.mjs",
     "eval:historical": "node --experimental-strip-types scripts/evaluate-historical.mjs",
+    "history:reprocess": "node --experimental-strip-types scripts/reprocess-history.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },

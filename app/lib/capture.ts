@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { alerts } from "../../db/schema";
+import historySource from "../data/history-source.json";
 import seed from "../data/seed-alerts.json";
 import { reviewEvent } from "./agent-harness";
 import { normalizeArticle } from "./ghost";
@@ -168,6 +169,51 @@ async function fetchFeed(env: CaptureEnv, parameters: Record<string, string>) {
   throw new Error("QVeris returned no readable feed");
 }
 
+async function storeRows(binding: D1Database, rows: Row[]) {
+  if (!rows.length) return;
+  const db = drizzle(binding);
+  const values = rows.map((row) => ({
+    key: keyOf(row),
+    payload: JSON.stringify(row),
+    publishedAt: String(row.published_at || ""),
+  }));
+  for (let index = 0; index < values.length; index += WRITE_BATCH) {
+    await db.insert(alerts).values(values.slice(index, index + WRITE_BATCH)).onConflictDoUpdate({
+      target: alerts.key,
+      set: { payload: sql`excluded.payload`, publishedAt: sql`excluded.published_at` },
+    });
+  }
+}
+
+export async function runHistoryBatch(env: CaptureEnv, limit = 12) {
+  if (!env.DB) throw new Error("D1 binding DB is unavailable");
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS history_reprocess (
+    key TEXT PRIMARY KEY, processed_at TEXT NOT NULL, score INTEGER NOT NULL, status TEXT NOT NULL
+  )`).run();
+  const done = await env.DB.prepare("SELECT key FROM history_reprocess").all<{ key: string }>();
+  const processed = new Set((done.results || []).map((row) => row.key));
+  const pending = uniqueRows(historySource as Row[]).filter((row) => !processed.has(keyOf(row)));
+  const batch = pending.slice(0, Math.max(1, Math.min(limit, 24))).map((row) => scoreEvent({ ...row }));
+  const reviewed = await judgeRows(batch, env.DEEPSEEK_API_KEY);
+  const translated = await translateRows(reviewed, env.DEEPSEEK_API_KEY);
+  await storeRows(env.DB, translated);
+  const now = new Date().toISOString();
+  for (const row of translated) {
+    await env.DB.prepare(`INSERT INTO history_reprocess (key, processed_at, score, status) VALUES (?, ?, ?, ?)
+      ON CONFLICT(key) DO UPDATE SET processed_at = excluded.processed_at, score = excluded.score, status = excluded.status`)
+      .bind(keyOf(row), now, Number(row.ghost_score || 0), String(row.analysis_method || "unknown")).run();
+  }
+  return {
+    processed: translated.length,
+    remaining: Math.max(0, pending.length - translated.length),
+    total: (historySource as Row[]).length,
+    alert: translated.filter((row) => row.alert_level === "alert").length,
+    watch: translated.filter((row) => row.alert_level === "watch").length,
+    fallback: translated.filter((row) => row.analysis_method === "rules_fallback").length,
+    ts: now,
+  };
+}
+
 export async function runCapture(env: CaptureEnv) {
   if (!env.QVERIS_API_KEY) throw new Error("QVERIS_API_KEY is not configured");
   if (!env.DB) throw new Error("D1 binding DB is unavailable");
@@ -229,20 +275,7 @@ export async function runCapture(env: CaptureEnv) {
   const migrated = await translateRows(reviewedLegacy, env.DEEPSEEK_API_KEY);
   const writeRows = [...rows, ...migrated];
 
-  if (writeRows.length) {
-    const db = drizzle(env.DB);
-    const values = writeRows.map((row: Row) => ({
-      key: keyOf(row),
-      payload: JSON.stringify(row),
-      publishedAt: String(row.published_at || ""),
-    }));
-    for (let i = 0; i < values.length; i += WRITE_BATCH) {
-      await db.insert(alerts).values(values.slice(i, i + WRITE_BATCH)).onConflictDoUpdate({
-        target: alerts.key,
-        set: { payload: sql`excluded.payload`, publishedAt: sql`excluded.published_at` },
-      });
-    }
-  }
+  await storeRows(env.DB, writeRows);
 
   const result = {
     fetched: raw.length,
