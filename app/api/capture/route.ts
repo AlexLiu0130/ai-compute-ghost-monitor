@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { runCapture } from "../../lib/capture";
+import { recordCaptureFailure, runCapture } from "../../lib/capture";
 
 export async function POST(request: Request) {
   try {
@@ -10,6 +10,7 @@ export async function POST(request: Request) {
     }
     return Response.json(await runCapture(env as unknown as Parameters<typeof runCapture>[0]));
   } catch (error) {
+    await recordCaptureFailure(env as unknown as Parameters<typeof runCapture>[0], error);
     const message = error instanceof Error ? error.message.slice(0, 300) : "capture failed";
     return Response.json({ error: message }, { status: 500 });
   }

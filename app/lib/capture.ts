@@ -22,6 +22,30 @@ type CaptureEnv = {
 type Row = Record<string, unknown>;
 const list = (value: unknown) => Array.isArray(value) ? value : [];
 
+async function ensureCaptureStatus(db: D1Database) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS capture_status (
+      id INTEGER PRIMARY KEY,
+      fetched INTEGER NOT NULL DEFAULT 0,
+      captured INTEGER NOT NULL DEFAULT 0,
+      stored INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'ready',
+      errors TEXT NOT NULL DEFAULT '[]',
+      updated_at TEXT NOT NULL DEFAULT ''
+    )
+  `).run();
+}
+
+export async function recordCaptureFailure(env: CaptureEnv, error: unknown) {
+  if (!env.DB) return;
+  await ensureCaptureStatus(env.DB);
+  const message = error instanceof Error ? error.message.slice(0, 300) : "capture failed";
+  await env.DB.prepare(`
+    INSERT INTO capture_status (id, status, errors, updated_at) VALUES (1, 'error', ?, ?)
+    ON CONFLICT(id) DO UPDATE SET status = 'error', errors = excluded.errors, updated_at = excluded.updated_at
+  `).bind(JSON.stringify([message]), new Date().toISOString()).run();
+}
+
 function keyOf(row: Row) {
   return String(row.url || `${row.published_at || ""}:${row.title || ""}`);
 }
@@ -132,6 +156,11 @@ async function fetchFeed(env: CaptureEnv, parameters: Record<string, string>) {
 export async function runCapture(env: CaptureEnv) {
   if (!env.QVERIS_API_KEY) throw new Error("QVERIS_API_KEY is not configured");
   if (!env.DB) throw new Error("D1 binding DB is unavailable");
+  await ensureCaptureStatus(env.DB);
+  await env.DB.prepare(`
+    INSERT INTO capture_status (id, status, errors, updated_at) VALUES (1, 'running', '[]', ?)
+    ON CONFLICT(id) DO UPDATE SET status = 'running', errors = '[]', updated_at = excluded.updated_at
+  `).bind(new Date().toISOString()).run();
 
   const raw = [];
   const errors = [];
@@ -195,17 +224,6 @@ export async function runCapture(env: CaptureEnv) {
     ts: new Date().toISOString(),
   };
 
-  await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS capture_status (
-      id INTEGER PRIMARY KEY,
-      fetched INTEGER NOT NULL DEFAULT 0,
-      captured INTEGER NOT NULL DEFAULT 0,
-      stored INTEGER NOT NULL DEFAULT 0,
-      status TEXT NOT NULL DEFAULT 'ready',
-      errors TEXT NOT NULL DEFAULT '[]',
-      updated_at TEXT NOT NULL DEFAULT ''
-    )
-  `).run();
   await env.DB.prepare(`
     INSERT INTO capture_status (id, fetched, captured, stored, status, errors, updated_at)
     VALUES (1, ?, ?, ?, 'ready', ?, ?)
