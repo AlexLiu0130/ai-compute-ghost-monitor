@@ -1,7 +1,6 @@
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { alerts } from "../../db/schema";
-import historySource from "../data/history-source.json";
 import seed from "../data/seed-alerts.json";
 import { reviewEvent } from "./agent-harness";
 import { normalizeArticle } from "./ghost";
@@ -183,45 +182,6 @@ async function storeRows(binding: D1Database, rows: Row[]) {
       set: { payload: sql`excluded.payload`, publishedAt: sql`excluded.published_at` },
     });
   }
-}
-
-export async function runHistoryBatch(env: CaptureEnv, limit = 12) {
-  if (!env.DB) throw new Error("D1 binding DB is unavailable");
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS history_reprocess (
-    key TEXT PRIMARY KEY, processed_at TEXT NOT NULL, score INTEGER NOT NULL, status TEXT NOT NULL
-  )`).run();
-  const done = await env.DB.prepare("SELECT key FROM history_reprocess").all<{ key: string }>();
-  const processed = new Set((done.results || []).map((row) => row.key));
-  const pending = uniqueRows(historySource as Row[]).filter((row) => !processed.has(keyOf(row)));
-  const batch = pending.slice(0, Math.max(1, Math.min(limit, 24))).map((row) => scoreEvent({ ...row }));
-  const reviewed = await judgeRows(batch, env.DEEPSEEK_API_KEY);
-  const translated = await translateRows(reviewed, env.DEEPSEEK_API_KEY);
-  await storeRows(env.DB, translated);
-  const now = new Date().toISOString();
-  for (const row of translated) {
-    await env.DB.prepare(`INSERT INTO history_reprocess (key, processed_at, score, status) VALUES (?, ?, ?, ?)
-      ON CONFLICT(key) DO UPDATE SET processed_at = excluded.processed_at, score = excluded.score, status = excluded.status`)
-      .bind(keyOf(row), now, Number(row.ghost_score || 0), String(row.analysis_method || "unknown")).run();
-  }
-  const aggregate = await env.DB.prepare(`SELECT
-    COUNT(*) AS processed,
-    SUM(CASE WHEN score >= 65 THEN 1 ELSE 0 END) AS alert,
-    SUM(CASE WHEN score >= 35 AND score < 65 THEN 1 ELSE 0 END) AS watch,
-    SUM(CASE WHEN score < 35 THEN 1 ELSE 0 END) AS log
-    FROM history_reprocess`).first<{ processed: number; alert: number; watch: number; log: number }>();
-  const methods = await env.DB.prepare("SELECT status, COUNT(*) AS count FROM history_reprocess GROUP BY status")
-    .all<{ status: string; count: number }>();
-  return {
-    processed: translated.length,
-    remaining: Math.max(0, pending.length - translated.length),
-    total: (historySource as Row[]).length,
-    alert: translated.filter((row) => row.alert_level === "alert").length,
-    watch: translated.filter((row) => row.alert_level === "watch").length,
-    fallback: translated.filter((row) => row.analysis_method === "rules_fallback").length,
-    aggregate,
-    methods: Object.fromEntries((methods.results || []).map((row) => [row.status, row.count])),
-    ts: now,
-  };
 }
 
 export async function runCapture(env: CaptureEnv) {
