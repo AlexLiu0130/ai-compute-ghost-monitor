@@ -151,3 +151,14 @@ test("failed critique preserves validated analysis but cannot trigger an alert",
     globalThis.fetch = originalFetch;
   }
 });
+
+test("analysis fallback is marked as v3 and cannot trigger an alert", async () => {
+  const { reviewEvent } = await import(new URL("../app/lib/agent-harness.ts", import.meta.url).href);
+  const { scoreEvent, shouldCritique } = await import(new URL("../app/lib/scoring.ts", import.meta.url).href);
+  const row = { title: "AI infrastructure update", summary: "No verified market event.", ghost_score: 81 };
+  const result = await reviewEvent(row, undefined, scoreEvent, shouldCritique, true);
+  assert.equal(result.scoring_version, "anchored-v3");
+  assert.equal(result.scoring_method, "rules_fallback");
+  assert.ok(result.ghost_score <= 39);
+  assert.notEqual(result.alert_level, "alert");
+});

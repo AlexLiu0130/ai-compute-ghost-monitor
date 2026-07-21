@@ -15,7 +15,11 @@ function addTrace(row: Row, name: "analysis" | "critique", trace: Trace) { row.a
 function fallback(row: Row, prompt: "analysis" | "critique", status: Trace["status"], error?: string, durationMs = 0) {
   const score = Math.min(39, Math.max(0, Number(row.ghost_score || 0)));
   const alertLevel = score >= 35 ? "watch" : "log";
-  Object.assign(row, { ghost_score: score, relevance_score: score, priorityScore: score, alert_level: alertLevel, alertLevel });
+  Object.assign(row, {
+    ghost_score: score, relevance_score: score, priorityScore: score,
+    alert_level: alertLevel, alertLevel,
+    scoring_version: "anchored-v3", scoring_method: "rules_fallback",
+  });
   row.analysis_method = "rules_fallback";
   row.rationale = [...(Array.isArray(row.rationale) ? row.rationale : []), `agent_${prompt}=${status}${error ? `:${error}` : ""}`, "agent_fallback_score_cap=39"];
   addTrace(row, prompt, { prompt, version: AGENT_PROMPT_VERSION, model: MODEL, durationMs, status, ...(error ? { error } : {}), toolBudget: { ...TOOL_BUDGET } });
