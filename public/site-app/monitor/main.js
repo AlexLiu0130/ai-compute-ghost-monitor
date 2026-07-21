@@ -8,6 +8,11 @@ const SCORE_KEYS = [
   ["contagion", "传染范围", "Contagion"],
   ["market_confirmation", "市场确认", "Market"],
 ];
+const COMPONENT_KEYS = [
+  ["eventConfidence", "事件可信度", "Event Confidence"],
+  ["impactPotential", "影响潜力", "Impact Potential"],
+  ["directionConfidence", "方向置信度", "Direction Confidence"],
+];
 const LEVEL_ZH = { alert: "警报", watch: "观察", log: "记录" };
 const LEVEL_EN = { alert: "Alert", watch: "Watch", log: "Log" };
 const DIR_ZH = { bullish: "利多", bearish: "利空", mixed: "混合", watch: "观察" };
@@ -214,27 +219,6 @@ function ui(zh, en) {
 
 /* ---------- 标的影响：聚合重复、突出例外 ---------- */
 
-function probText(p) {
-  if (!p || !p.sample_size) return "";
-  const up = Math.round(p.p_up * 100);
-  const conf = p.confidence == null ? "" : `${state.lang === "en" ? ", confidence " : "，置信 "}${Math.round(p.confidence * 100)}%`;
-  const move = p.expected_reaction_pct == null ? "" : `${state.lang === "en" ? ", avg " : "，均值 "}${p.expected_reaction_pct > 0 ? "+" : ""}${p.expected_reaction_pct}%`;
-  return state.lang === "en" ? `Overall: up ${up}% / down ${100 - up}%${conf}${move}` : `总体预测：反应涨 ${up}% / 跌 ${100 - up}%${conf}${move}`;
-}
-
-function groupProb(a, tickers) {
-  const rows = tickers.map((t) => a.ml_predictions?.[t]).filter((p) => p && p.sample_size > 0);
-  if (!rows.length) return null;
-  const weight = (p) => Math.max(1, Math.min(50, p.sample_size || 1));
-  const total = rows.reduce((s, p) => s + weight(p), 0);
-  return {
-    p_up: rows.reduce((s, p) => s + p.p_up * weight(p), 0) / total,
-    confidence: rows.reduce((s, p) => s + (p.confidence || 0) * weight(p), 0) / total,
-    expected_reaction_pct: rows.reduce((s, p) => s + (p.expected_reaction_pct || 0) * weight(p), 0) / total,
-    sample_size: Math.max(...rows.map((p) => p.sample_size || 0)),
-  };
-}
-
 function dirCardHtml(a, t, d) {
   const q = a.current_prices?.[t] || {};
   const price = q.price != null ? `<span class="px">${ui("现价", "Price")} ${esc(q.price)}</span>` : "";
@@ -280,7 +264,6 @@ function dirSectionHtml(a) {
       : { bearish: "方向偏空", bullish: "方向偏多", mixed: "方向分歧" }[dom[0]])
     : ui("方向观望", "Watch");
   const verdictDir = dom ? dom[0] : "watch";
-  const domProb = dom ? probText(groupProb(a, groups[dom[0]] || [])) : "";
 
   const bar = DIR_ORDER.filter((d) => counts[d])
     .map((d) => `<span class="dist-seg d-${d}" style="width:${(counts[d] / total) * 100}%"></span>`)
@@ -308,7 +291,6 @@ function dirSectionHtml(a) {
       const preferred = tickers.filter(isCore);
       const core = [...new Set([...preferred, ...tickers.slice(0, 3)])].slice(0, MAX_CORE);
       const rest = tickers.filter((t) => !core.includes(t));
-      const prob = probText(groupProb(a, groups[d]));
 
       const cards = core.map((t) => dirCardHtml(a, t, d)).join("");
       const pills = rest
@@ -321,7 +303,6 @@ function dirSectionHtml(a) {
       return `<div class="dir-group">
         <div class="dir-group-head">
           <span class="g-name dir-${esc(d)}">${DIR_GLYPH[d]} ${esc((state.lang === "en" ? DIR_EN : DIR_ZH)[d] || d)} · ${tickers.length}</span>
-          ${prob ? `<span class="g-prob">${esc(prob)}</span>` : ""}
           <span class="g-line"></span>
         </div>
         ${cards ? `<div class="core-grid">${cards}</div>` : ""}
@@ -334,12 +315,11 @@ function dirSectionHtml(a) {
     <div class="dir-overview">
       <span class="dir-verdict dir-${esc(verdictDir)}">${esc(verdict)}</span>
       <span class="dir-sub">${dom ? ui(`${total} 个标的中 ${dom[1]} 个${esc(DIR_ZH[dom[0]])}`, `${dom[1]} of ${total} tickers ${esc(DIR_EN[dom[0]])}`) : ui(`${total} 个标的均为观察`, `${total} tickers on watch`)}</span>
-      ${domProb ? `<span class="dir-prob">${esc(domProb)}</span>` : ""}
     </div>
     <div class="dist-bar">${bar}</div>
     <div class="dist-legend">${legend}</div>
     ${groupsHtml}
-    <div class="score-note dim">${ui("方向由语义模型判断；概率为历史反应窗口校准的实验值，非交易建议。", "Direction is model-assisted; probabilities are experimental historical calibrations, not trading advice.")}</div>`;
+    <div class="score-note dim">${ui("方向由语义模型辅助判断，需结合原始新闻与市场数据人工复核。", "Directions are model-assisted and require review against the source and market data.")}</div>`;
 }
 
 function impactHtml(a, ticker) {
@@ -413,7 +393,8 @@ function renderFeed() {
 /* ---------- detail ---------- */
 
 function segBar(n, rowIdx) {
-  const val = Math.max(0, Math.min(3, Number(n) || 0));
+  const raw = Number(n) || 0;
+  const val = Math.max(0, Math.min(3, raw > 3 ? Math.ceil(raw / 34) : raw));
   let cells = "";
   for (let i = 1; i <= 3; i++) {
     cells += `<span class="seg${i <= val ? ` on-${val}` : ""}" style="--d:${rowIdx * 3 + i}"></span>`;
@@ -422,7 +403,8 @@ function segBar(n, rowIdx) {
 }
 
 function renderDetail(a, container) {
-  const scoreRows = SCORE_KEYS.map(
+  const scoreKeys = Number.isFinite(Number(a.eventConfidence)) ? COMPONENT_KEYS : SCORE_KEYS;
+  const scoreRows = scoreKeys.map(
     ([key, zh, en], i) =>
       `<span class="k">${ui(zh, en)}</span>${segBar(a[key], i)}<span class="v">${esc(a[key] ?? "—")}</span>`
   ).join("");
@@ -450,10 +432,12 @@ function renderDetail(a, container) {
         <span class="badge lvl-${esc(a.alert_level)}">${esc((state.lang === "en" ? LEVEL_EN : LEVEL_ZH)[a.alert_level] || a.alert_level)}</span>
         <span class="dir-tag type-tag" style="--tc:${esc(typeColor(a.ghost_type))}">${esc(fmtType(a.ghost_type))}</span>
         <span class="dir-tag">${a.analysis_method === "llm" ? ui("大模型分析", "LLM") : ui("规则兜底", "Rules")}</span>
+        <span class="dir-tag">${a.scoring_version === "anchored-v3" ? ui("评分 v3", "Score v3") : ui("历史评分", "Legacy score")}</span>
         <span class="row-time">${relTime(a.published_at)}</span>
       </div>
       <h2 class="detail-title">${titleHtml(a)}</h2>
       ${newsSummary(a) ? `<div class="detail-summary" style="--tc:${esc(typeColor(a.ghost_type))}"><p>${esc(newsSummary(a))}</p></div>` : ""}
+      ${englishRaw(a)}
       <div class="detail-meta">
         ${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(a.source)} ↗</a>` : `<span>${esc(a.source)}</span>`}
         ${published ? `<span>${esc(published)}</span>` : ""}
@@ -461,7 +445,7 @@ function renderDetail(a, container) {
     </div>
 
     <div class="section-label">${ui("评分拆解", "Score")}</div>
-    <div class="score-note">${ui("鬼分为 100 分制：20 以下影响较小，20-59 进入观察，60 以上警报。", "Ghost score is 0-100: below 20 is minor, 20-59 is watch, 60+ is alert.")}</div>
+    <div class="score-note">${ui("鬼分是实验性新闻查看优先级：0-34 记录，35-64 观察，65-100 警报；不代表涨跌概率、因果关系或交易建议。", "Ghost score is an experimental review priority: 0-34 Log, 35-64 Watch, 65-100 Alert; it is not a price probability, causal claim, or trading advice.")}</div>
     <div class="score-grid">${scoreRows}</div>
 
     <div class="section-label">${ui("影响链条", "Impact Chain")}</div>
@@ -516,8 +500,9 @@ function formatRationale(text) {
 }
 
 function rawView(a) {
-  if (state.lang === "zh") return a;
   const copy = { ...a };
+  delete copy.ml_predictions;
+  if (state.lang === "zh") return copy;
   delete copy.title_zh;
   delete copy.summary_zh;
   copy.rationale = (copy.rationale || []).filter((item) => !hasCjk(item));
@@ -554,14 +539,13 @@ function renderStats() {
   document.querySelector('[data-view="monitor"]').textContent = ui("监控", "Monitor");
   document.querySelector('[data-view="analyze"]').textContent = ui("分析", "Analyze");
   document.querySelectorAll(".product-links [data-zh]").forEach((node) => { node.textContent = node.dataset[state.lang]; });
+  $("#monitor-disclaimer").textContent = $("#monitor-disclaimer").dataset[state.lang];
   $("#analyze-title").textContent = ui("// 单条新闻分析", "// Analyze one story");
   $("#label-title").textContent = ui("标题", "Headline");
   $("#label-summary").textContent = ui("摘要", "Summary");
   $("#label-source").textContent = ui("来源", "Source");
   $("#label-symbols").textContent = ui("标的", "Tickers");
   $("#hint-symbols").textContent = ui("逗号分隔", "comma-separated");
-  $("#label-market").textContent = ui("市场确认 JSON", "Market confirmation JSON");
-  $("#hint-market").textContent = ui("可选", "optional");
   $("#analyze-btn").textContent = ui("开始分析", "Analyze");
   $("#analyze-empty").textContent = ui("结果预览", "Result preview");
   $("#monitor-empty") && ($("#monitor-empty").textContent = ui("选择一条信号", "Select a signal"));
@@ -685,37 +669,6 @@ document.querySelectorAll(".tab").forEach((tab) => {
   });
 });
 
-function analyzeLocal(payload) {
-  const text = `${payload.title} ${payload.summary}`.toLowerCase();
-  const rules = {
-    compute_overcapacity: ["excess compute", "excess ai compute", "excess capacity", "overcapacity", "算力过剩", "过度建设"],
-    capex_roi_doubt: ["roi", "overspending", "ai spending", "capex", "回报", "支出"],
-    order_inventory_weakness: ["order cut", "inventory", "backlog", "selloff", "订单", "库存"],
-    hbm_shortage: ["hbm shortage", "sold out", "memory shortage", "供不应求", "短缺"],
-    capacity_flood: ["capacity expansion", "supply flood", "price war", "扩产", "价格战"],
-    data_center_delay: ["data center delay", "power constraint", "permitting delay", "数据中心延期", "电力约束"],
-    financing_stress: ["debt financing", "equity raise", "refinancing", "融资", "债务"],
-    export_regulatory: ["export control", "restriction", "sanction", "出口管制", "制裁"],
-  };
-  const ranked = Object.entries(rules).map(([type, words]) => [type, words.filter((word) => text.includes(word))]).sort((a, b) => b[1].length - a[1].length);
-  const [ghostType, hits] = ranked[0][1].length ? ranked[0] : ["ordinary_ai_news", []];
-  const credibility = /reuters|bloomberg|sec|公司公告|company ir/i.test(payload.source) ? 3 : /yahoo|cnbc|fortune|wsj|ft/i.test(payload.source) ? 2 : 1;
-  const novelty = /new|first|announced|reportedly|plans to|最新|首次|宣布/i.test(text) ? 3 : 2;
-  const theme = hits.length ? 3 : /ai|chip|gpu|hbm|compute|semiconductor|芯片|算力|内存/i.test(text) ? 2 : 1;
-  const ghostScore = Math.max(0, Math.min(100, Math.round((((credibility * novelty * theme * 2) - 1) / 242) ** .45 * 100)));
-  const symbols = payload.symbols.map((x) => x.toUpperCase());
-  const defaultDirection = ["hbm_shortage", "capacity_flood"].includes(ghostType) ? "bullish" : ghostType === "ordinary_ai_news" ? "watch" : "bearish";
-  const tickerDirections = Object.fromEntries(symbols.map((symbol) => [symbol, defaultDirection]));
-  return {
-    ...payload, ghost_type: ghostType, credibility, novelty, theme_strength: theme,
-    contagion: 2, market_confirmation: payload.market ? 2 : 1, ghost_score: ghostScore,
-    alert_level: ghostScore >= 60 ? "alert" : ghostScore >= 20 ? "watch" : "log",
-    affected_layers: [], ticker_directions: tickerDirections, direction_reasons: {}, ml_predictions: {},
-    rationale: [`type=${ghostType}`, `source_credibility=${credibility}`, `matched_keywords=${hits.join(", ") || "none"}`, "browser rules analysis"],
-    analysis_method: "rules", published_at: new Date().toISOString(), url: "",
-  };
-}
-
 $("#analyze-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const form = e.target;
@@ -726,20 +679,17 @@ $("#analyze-form").addEventListener("submit", async (e) => {
     source: form.source.value.trim(),
     symbols: form.symbols.value.split(",").map((s) => s.trim()).filter(Boolean),
   };
-  if (form.market.value.trim()) {
-    try {
-      payload.market = JSON.parse(form.market.value);
-    } catch {
-      status.textContent = ui("市场 JSON 无效", "Invalid market JSON");
-      status.className = "err";
-      return;
-    }
-  }
   $("#analyze-btn").disabled = true;
   status.textContent = ui("分析中…", "Analyzing...");
   status.className = "";
   try {
-    renderDetail(analyzeLocal(payload), $("#analyze-result"));
+    const res = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    renderDetail(await res.json(), $("#analyze-result"));
     status.textContent = ui("完成", "Done");
   } catch (err) {
     status.textContent = `${ui("失败", "Failed")}: ${err.message}`;

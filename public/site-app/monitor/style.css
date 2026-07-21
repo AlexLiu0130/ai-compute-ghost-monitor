@@ -757,6 +757,14 @@ details.raw pre {
 
 .analyze-form-pane { padding: 32px 36px; overflow-y: auto; }
 
+.monitor-disclaimer {
+  margin: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--faint);
+  font: 400 10.5px/1.5 var(--sans);
+}
+
 .pane-title {
   margin: 0 0 24px;
   font: 600 14px var(--sans);

@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "scoreEventContract": {
+    "module": "app/lib/scoring.ts",
+    "export": "scoreEvent",
+    "signature": "scoreEvent(analysis)",
+    "relevanceThreshold": 35,
+    "requiredResultFields": ["priorityScore", "alertLevel", "critique", "impacts"],
+    "tickerImpact": {
+      "requiredFields": ["ticker", "tier", "direction"],
+      "tiers": ["direct", "first_order", "second_order"],
+      "directions": ["bullish", "bearish", "mixed", "watch"]
+    },
+    "notMeasured": "This corpus validates relevance and directional labels only; it does not claim market-probability accuracy."
+  },
+  "cases": [
+    {
+      "id": "real-compute-overcapacity",
+      "input": { "title": "Meta offers unused GPU clusters to external customers as internal demand misses plan", "summary": "Reuters reports low utilization of AI infrastructure and an effort to sell excess AI compute capacity after weaker-than-expected internal demand.", "source": "Reuters", "symbols": ["META", "NVDA", "QQQ"] },
+      "score_event_input": { "title": "Meta offers unused GPU clusters to external customers as internal demand misses plan", "summary": "Reuters reports low utilization of AI infrastructure and an effort to sell excess AI compute capacity after weaker-than-expected internal demand.", "source": "Reuters", "symbols": ["META", "NVDA", "QQQ"], "eventType": "compute_overcapacity", "keywordEvidence": 4, "keywordHits": ["excess AI compute", "low utilization"], "affectedLayers": ["hyperscaler", "accelerator", "basket"], "tickerDirections": { "META": "mixed", "NVDA": "bearish", "QQQ": "bearish" }, "directSymbols": ["META"], "sourceCount": 2, "marketConfirmed": true, "duplicate": false, "conflict": false, "llm": { "eventType": "compute_overcapacity", "strength": 3, "reason": "spare GPU capacity after demand miss" } },
+      "expected": { "relevant": true, "alert": true, "in_scope": true, "ticker_impacts": [{ "ticker": "META", "tier": "direct", "direction": "mixed" }, { "ticker": "NVDA", "tier": "first_order", "direction": "bearish" }, { "ticker": "QQQ", "tier": "second_order", "direction": "bearish" }], "has_conflict": false }
+    },
+    {
+      "id": "hbm-shortage-chain-impact",
+      "input": { "title": "SK Hynix says HBM3E output is sold out as AI memory supply stays tight", "summary": "Strong accelerator demand has created an HBM shortage, with customers reserving supply and memory pricing rising.", "source": "Reuters", "symbols": ["000660.KS", "MU", "SMH"] },
+      "score_event_input": { "title": "SK Hynix says HBM3E output is sold out as AI memory supply stays tight", "summary": "Strong accelerator demand has created an HBM shortage, with customers reserving supply and memory pricing rising.", "source": "Reuters", "symbols": ["000660.KS", "MU", "SMH"], "eventType": "hbm_shortage", "keywordEvidence": 4, "keywordHits": ["HBM shortage", "sold out", "supply tight"], "affectedLayers": ["memory_storage", "accelerator", "basket"], "tickerDirections": { "000660.KS": "bullish", "MU": "bullish", "SMH": "bullish" }, "directSymbols": ["000660.KS"], "sourceCount": 2, "marketConfirmed": true, "duplicate": false, "conflict": false, "llm": { "eventType": "hbm_shortage", "strength": 3, "reason": "supply allocation and sold-out output" } },
+      "expected": { "relevant": true, "alert": true, "in_scope": true, "ticker_impacts": [{ "ticker": "000660.KS", "tier": "direct", "direction": "bullish" }, { "ticker": "MU", "tier": "first_order", "direction": "bullish" }, { "ticker": "SMH", "tier": "second_order", "direction": "bullish" }], "has_conflict": false }
+    },
+    {
+      "id": "holdings-article-with-capacity-expansion",
+      "input": { "title": "PFG Investments increases Micron position while analysts discuss memory capacity expansion", "summary": "The filing describes a fund stake in MU shares and repeats analyst price targets; it contains no new company capacity decision.", "source": "MarketBeat", "symbols": ["MU"] },
+      "score_event_input": { "title": "PFG Investments increases Micron position while analysts discuss memory capacity expansion", "summary": "The filing describes a fund stake in MU shares and repeats analyst price targets; it contains no new company capacity decision.", "source": "MarketBeat", "symbols": ["MU"], "eventType": "ordinary_ai_news", "keywordEvidence": 1, "keywordHits": ["capacity expansion"], "affectedLayers": [], "tickerDirections": {}, "directSymbols": [], "sourceCount": 1, "marketConfirmed": false, "duplicate": false, "conflict": false },
+      "expected": { "relevant": false, "alert": false, "in_scope": false, "ticker_impacts": [], "has_conflict": false }
+    },
+    {
+      "id": "paccar-freight-overcapacity",
+      "input": { "title": "PACCAR sees freight-market overcapacity weighing on truck orders", "summary": "The truck maker describes excess freight capacity and dealer inventory; the article does not concern AI compute, semiconductors, or data centers.", "source": "Reuters", "symbols": ["PCAR"] },
+      "score_event_input": { "title": "PACCAR sees freight-market overcapacity weighing on truck orders", "summary": "The truck maker describes excess freight capacity and dealer inventory; the article does not concern AI compute, semiconductors, or data centers.", "source": "Reuters", "symbols": ["PCAR"], "eventType": "ordinary_ai_news", "keywordEvidence": 0, "keywordHits": [], "affectedLayers": [], "tickerDirections": {}, "directSymbols": [], "sourceCount": 1, "marketConfirmed": false, "duplicate": false, "conflict": false },
+      "expected": { "relevant": false, "alert": false, "in_scope": false, "ticker_impacts": [], "has_conflict": false }
+    },
+    {
+      "id": "nasdaq-employee-incentive",
+      "input": { "title": "Nasdaq approves employee equity incentive plan", "summary": "The exchange operator filed routine employee compensation plan documents. No AI infrastructure, chip supply, or data-center event is reported.", "source": "SEC", "symbols": ["NDAQ"] },
+      "score_event_input": { "title": "Nasdaq approves employee equity incentive plan", "summary": "The exchange operator filed routine employee compensation plan documents. No AI infrastructure, chip supply, or data-center event is reported.", "source": "SEC", "symbols": ["NDAQ"], "eventType": "ordinary_ai_news", "keywordEvidence": 0, "keywordHits": [], "affectedLayers": [], "tickerDirections": {}, "directSymbols": [], "sourceCount": 1, "marketConfirmed": false, "duplicate": false, "conflict": false },
+      "expected": { "relevant": false, "alert": false, "in_scope": false, "ticker_impacts": [], "has_conflict": false }
+    },
+    {
+      "id": "duplicate-low-quality-source",
+      "input": { "title": "Blog repeats claim that Meta will sell excess AI compute capacity", "summary": "AI Compute Daily republishes an unverified version of a previously reported spare GPU cluster story without new primary evidence.", "source": "AI Compute Daily", "symbols": ["META", "NVDA"] },
+      "score_event_input": { "title": "Blog repeats claim that Meta will sell excess AI compute capacity", "summary": "AI Compute Daily republishes an unverified version of a previously reported spare GPU cluster story without new primary evidence.", "source": "AI Compute Daily", "symbols": ["META", "NVDA"], "eventType": "compute_overcapacity", "keywordEvidence": 4, "keywordHits": ["excess AI compute"], "affectedLayers": ["hyperscaler", "accelerator"], "tickerDirections": { "META": "mixed", "NVDA": "bearish" }, "directSymbols": ["META"], "sourceCount": 1, "marketConfirmed": false, "duplicate": true, "conflict": false, "llm": { "eventType": "compute_overcapacity", "strength": 2, "reason": "duplicate of prior Reuters event" } },
+      "expected": { "relevant": false, "alert": false, "in_scope": true, "ticker_impacts": [], "has_conflict": false }
+    },
+    {
+      "id": "conflicting-hbm-evidence",
+      "input": { "title": "Reports conflict on whether HBM supply is short or inventory is building", "summary": "One supplier cites sold-out HBM allocation, while a separate channel check reports customer inventory above plan.", "source": "CNBC", "symbols": ["MU", "000660.KS"] },
+      "score_event_input": { "title": "Reports conflict on whether HBM supply is short or inventory is building", "summary": "One supplier cites sold-out HBM allocation, while a separate channel check reports customer inventory above plan.", "source": "CNBC", "symbols": ["MU", "000660.KS"], "eventType": "hbm_shortage", "keywordEvidence": 4, "keywordHits": ["HBM shortage", "allocation"], "affectedLayers": ["memory_storage", "accelerator"], "tickerDirections": {}, "directSymbols": [], "sourceCount": 2, "marketConfirmed": false, "duplicate": false, "conflict": true, "llm": { "eventType": "hbm_shortage", "strength": 2, "reason": "materially conflicting supplier and channel evidence" } },
+      "expected": { "relevant": true, "alert": false, "in_scope": true, "ticker_impacts": [], "has_conflict": true }
+    }
+  ]
+}

@@ -47,6 +47,9 @@
       <button class="chip chip-log" data-level="log">记录</button>
       <button class="chip" id="capture-btn" type="button">抓取最新</button>
     </div>
+    <p id="monitor-disclaimer" class="monitor-disclaimer"
+      data-zh="实验性新闻分诊：警报仅表示优先人工复核，不代表可靠市场预警、价格因果或交易建议。"
+      data-en="Experimental news triage: alerts mean priority review, not a reliable market warning, price causality, or trading advice.">实验性新闻分诊：警报仅表示优先人工复核，不代表可靠市场预警、价格因果或交易建议。</p>
     <div class="feed" id="feed"></div>
   </section>
 
@@ -73,9 +76,6 @@
           <input name="symbols" placeholder="META, NVDA, AMD, SMH" />
         </label>
       </div>
-      <label><span id="label-market">市场确认 JSON</span> <span class="hint" id="hint-market">可选</span>
-        <textarea name="market" rows="5" spellcheck="false" placeholder='{"NVDA": {"return_pct": -2.4, "volume_z": 2.2}}'></textarea>
-      </label>
       <div class="form-actions">
         <button type="submit" id="analyze-btn">开始分析</button>
         <span id="analyze-status"></span>

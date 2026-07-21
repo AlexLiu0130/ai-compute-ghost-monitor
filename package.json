@@ -9,7 +9,10 @@
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
     "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
+    "test": "npm run build && node --test tests/ghost-rules.test.mjs tests/scoring-agent.test.mjs tests/historical-evaluation.test.mjs tests/rendered-html.test.mjs",
+    "test:scoring": "node --test tests/ghost-rules.test.mjs tests/scoring-agent.test.mjs tests/historical-evaluation.test.mjs tests/rendered-html.test.mjs",
+    "eval:scoring": "node scripts/evaluate-scoring.mjs",
+    "eval:historical": "node --experimental-strip-types scripts/evaluate-historical.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },
@@ -21,6 +24,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",
+    "@cloudflare/workers-types": "^4.20260702.1",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",

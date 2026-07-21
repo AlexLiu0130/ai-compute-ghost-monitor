@@ -1,69 +1,84 @@
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { alerts } from "../../db/schema";
-import { applySemanticJudgment, normalizeArticle } from "./ghost";
+import seed from "../data/seed-alerts.json";
+import { reviewEvent } from "./agent-harness";
+import { normalizeArticle } from "./ghost";
+import { scoreEvent, shouldCritique } from "./scoring";
 
 const TOOL = "alphavantage.news_sentiment.query.v1.467a92c0";
 const TOPICS = ["technology", "financial_markets"];
 const TICKERS = "NVDA,AMD,AVGO,MRVL,INTC,QCOM,ANET,SMH,SOXX,QQQ,XLK,TSM,ASML,AMAT,LRCX,KLAC,SNPS,CDNS,META,MSFT,GOOGL,AMZN,ORCL,MU,WDC,SNDK,STX,SMCI,DELL,HPE,VRT,ETN,APH,GLW,CRWV,NBIS";
 const WRITE_BATCH = 1;
+const AGENT_CANDIDATE_LIMIT = 24;
+const AGENT_CONCURRENCY = 6;
+const LEGACY_REVIEW_LIMIT = 2;
 
 type CaptureEnv = {
   DB?: D1Database;
   QVERIS_API_KEY?: string;
   DEEPSEEK_API_KEY?: string;
 };
+type Row = Record<string, unknown>;
+const list = (value: unknown) => Array.isArray(value) ? value : [];
 
-function keyOf(row: any) {
-  return row.url || `${row.published_at || ""}:${row.title}`;
+function keyOf(row: Row) {
+  return String(row.url || `${row.published_at || ""}:${row.title || ""}`);
 }
 
-function needsTranslation(row: any) {
+function needsTranslation(row: Row) {
   const text = `${row.title_zh || ""} ${row.summary_zh || ""}`;
   return !row.title_zh || !row.summary_zh || text.includes("尚未完成中文翻译") || text.includes("ordinary ai news 信号");
 }
 
-function needsSemanticReview(row: any) {
+function needsSemanticReview(row: Row) {
   const text = `${row.title || ""} ${row.summary || ""}`.toLowerCase();
-  return row.symbols?.length || /\b(ai|chip|gpu|hbm|compute|semiconductor|memory|data center)\b/.test(text);
+  return list(row.symbols).length > 0 || /\b(ai|chip|gpu|hbm|compute|semiconductor|memory|data center)\b/.test(text);
 }
 
-async function judgeRows(rows: any[], key?: string) {
-  if (!key) return rows;
-  // ponytail: cap LLM review to newest 120 candidates; widen only if recall is still measurably poor.
-  const pending = rows.filter(needsSemanticReview).slice(0, 120);
-  const types = "compute_overcapacity, capex_roi_doubt, order_inventory_weakness, hbm_shortage, capacity_flood, data_center_delay, financing_stress, capital_markets_memory, export_regulatory, ordinary_ai_news";
-  for (let offset = 0; offset < pending.length; offset += 25) {
-    const batch = pending.slice(offset, offset + 25);
+async function judgeRows(rows: Row[], key?: string) {
+  const pending = rows.filter(needsSemanticReview).slice(0, AGENT_CANDIDATE_LIMIT);
+  const selected = new Set(pending);
+  for (let offset = 0; offset < pending.length; offset += AGENT_CONCURRENCY) {
+    await Promise.all(pending.slice(offset, offset + AGENT_CONCURRENCY).map((row) => reviewEvent(row, key, scoreEvent, shouldCritique, true)));
+  }
+  for (const row of rows) if (!selected.has(row)) await reviewEvent(row, key, scoreEvent, shouldCritique, false);
+  return rows;
+}
+
+function uniqueRows(rows: Row[]) {
+  const seen = new Set<string>();
+  return rows.filter((row) => { const key = keyOf(row); if (!key || seen.has(key)) return false; seen.add(key); return true; });
+}
+
+async function existingKeys(db: D1Database, rows: Row[]) {
+  const found = new Set<string>();
+  for (let offset = 0; offset < rows.length; offset += 80) {
+    const keys = rows.slice(offset, offset + 80).map(keyOf).filter(Boolean);
+    if (!keys.length) continue;
+    const query = `SELECT key FROM alerts WHERE key IN (${keys.map(() => "?").join(",")})`;
+    const result = await db.prepare(query).bind(...keys).all<{ key: string }>();
+    for (const item of result.results || []) found.add(item.key);
+  }
+  return found;
+}
+
+async function legacyStoredRows(db: D1Database, limit: number) {
+  const result = await db.prepare("SELECT payload FROM alerts ORDER BY published_at DESC LIMIT 200").all<{ payload: string }>();
+  const rows: Row[] = [];
+  for (const item of result.results || []) {
     try {
-      const response = await fetch("https://api.deepseek.com/chat/completions", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-        body: JSON.stringify({
-          model: "deepseek-chat",
-          temperature: 0,
-          response_format: { type: "json_object" },
-          messages: [{
-            role: "user",
-            content: `Classify AI compute market news semantically for a trader alert monitor. Valid ghost_type values: ${types}. strength: 0=no market event/listicle/fund holding, 1=weak mention, 2=meaningful sector event, 3=urgent/market-moving event. Fund holdings, price targets, generic stock-pick/listicle articles should be ordinary_ai_news strength 0 unless they contain a real supply/demand/capex/regulatory/order event. Return strict JSON {"items":[{"i":0,"ghost_type":"...","strength":0,"reason":"short English reason"}]}.\n${JSON.stringify(batch.map((r, i) => ({ i, title: r.title, summary: r.summary, source: r.source, symbols: r.symbols, rule_type: r.ghost_type, rule_score: r.ghost_score })))}`
-          }],
-        }),
-      });
-      if (!response.ok) throw new Error(`DeepSeek HTTP ${response.status}`);
-      const payload = await response.json() as any;
-      const data = JSON.parse(payload.choices?.[0]?.message?.content || "{}");
-      for (const item of data.items || []) {
-        const row = batch[item.i];
-        if (row) applySemanticJudgment(row, item);
-      }
+      const row = JSON.parse(item.payload) as Row;
+      if (row.scoring_version !== "anchored-v3") rows.push(row);
     } catch {
-      // Rules remain the fallback if semantic review is unavailable.
+      // Ignore malformed legacy rows; /api/alerts already treats the database as fallible.
     }
+    if (rows.length >= limit) break;
   }
   return rows;
 }
 
-async function translateRows(rows: any[], key?: string) {
+async function translateRows(rows: Row[], key?: string) {
   if (!key) return rows;
   const pending = rows.filter(needsTranslation);
   for (let offset = 0; offset < pending.length; offset += 30) {
@@ -83,9 +98,9 @@ async function translateRows(rows: any[], key?: string) {
         }),
       });
       if (!response.ok) throw new Error(`DeepSeek HTTP ${response.status}`);
-      const payload = await response.json() as any;
+      const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
       const data = JSON.parse(payload.choices?.[0]?.message?.content || "{}");
-      for (const item of data.items || []) {
+      for (const item of (data.items || []) as Array<{ i: number; title_zh?: string; summary_zh?: string }>) {
         const row = batch[item.i];
         if (row && item.title_zh && item.summary_zh) Object.assign(row, { title_zh: item.title_zh, summary_zh: item.summary_zh });
       }
@@ -106,12 +121,12 @@ async function fetchFeed(env: CaptureEnv, parameters: Record<string, string>) {
     body: JSON.stringify({ tool_id: TOOL, parameters }),
   });
   if (!response.ok) throw new Error(`QVeris HTTP ${response.status}`);
-  const payload = await response.json() as any;
+  const payload = await response.json() as { result?: { data?: { feed?: unknown[] }; content?: { feed?: unknown[] }; full_content_file_url?: string } };
   let content = payload.result?.data || payload.result?.content || {};
   if (!content.feed && payload.result?.full_content_file_url) {
     content = await (await fetch(payload.result.full_content_file_url)).json();
   }
-  return content.feed || [];
+  return list(content.feed);
 }
 
 export async function runCapture(env: CaptureEnv) {
@@ -134,22 +149,33 @@ export async function runCapture(env: CaptureEnv) {
   }
   if (!raw.length && errors.length) throw new Error(errors.join("; "));
 
-  const seen = new Set<string>();
-  const judged = await judgeRows(raw.map(normalizeArticle), env.DEEPSEEK_API_KEY);
-  const rows = await translateRows(judged.filter((row: any) => {
-    const key = keyOf(row);
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    if (row.ghost_type !== "ordinary_ai_news") return row.symbols?.length || row.ghost_score >= 20;
-    return row.ghost_score >= 20 && row.symbols?.some((symbol: string) => TICKERS.split(",").includes(symbol));
+  const normalized = uniqueRows(raw.map(normalizeArticle));
+  const storedKeys = await existingKeys(env.DB, normalized);
+  const judged = await judgeRows(normalized.filter((row) => !storedKeys.has(keyOf(row))), env.DEEPSEEK_API_KEY);
+  const rows = await translateRows(judged.filter((row: Row) => {
+    return Number(row.ghost_score || 0) >= 20 && list(row.symbols).some((symbol) => TICKERS.split(",").includes(String(symbol)));
   }), env.DEEPSEEK_API_KEY);
 
-  if (rows.length) {
+  // Migrate a small, bounded slice of legacy seed records on every scheduled run.
+  // D1 rows override matching seeds in /api/alerts, so the migration is resumable.
+  const storedLegacy = env.DEEPSEEK_API_KEY ? await legacyStoredRows(env.DB, LEGACY_REVIEW_LIMIT) : [];
+  const seedKeys = env.DEEPSEEK_API_KEY && storedLegacy.length < LEGACY_REVIEW_LIMIT
+    ? await existingKeys(env.DB, seed as Row[]) : new Set<string>();
+  const seedLegacy = (seed as Row[])
+    .filter((row) => row.scoring_version !== "anchored-v3" && !seedKeys.has(keyOf(row)))
+    .slice(0, LEGACY_REVIEW_LIMIT - storedLegacy.length);
+  const legacy = env.DEEPSEEK_API_KEY
+    ? [...storedLegacy, ...seedLegacy].map((row) => scoreEvent(row)) : [];
+  const reviewedLegacy = await judgeRows(legacy, env.DEEPSEEK_API_KEY);
+  const migrated = await translateRows(reviewedLegacy, env.DEEPSEEK_API_KEY);
+  const writeRows = [...rows, ...migrated];
+
+  if (writeRows.length) {
     const db = drizzle(env.DB);
-    const values = rows.map((row: any) => ({
+    const values = writeRows.map((row: Row) => ({
       key: keyOf(row),
       payload: JSON.stringify(row),
-      publishedAt: row.published_at || "",
+      publishedAt: String(row.published_at || ""),
     }));
     for (let i = 0; i < values.length; i += WRITE_BATCH) {
       await db.insert(alerts).values(values.slice(i, i + WRITE_BATCH)).onConflictDoUpdate({
@@ -162,7 +188,8 @@ export async function runCapture(env: CaptureEnv) {
   const result = {
     fetched: raw.length,
     captured: rows.length,
-    stored: rows.length,
+    stored: writeRows.length,
+    migrated: migrated.length,
     mode: "global",
     errors,
     ts: new Date().toISOString(),

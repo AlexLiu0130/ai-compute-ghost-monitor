@@ -28,6 +28,8 @@ function mergeAlerts(rows: Record<string, unknown>[]) {
 
 function cleanAlert(row: Record<string, unknown>) {
   const copy = { ...row };
+  delete copy.ml_predictions;
+  if (!copy.scoring_version) copy.scoring_version = "legacy-v2";
   const zh = `${copy.title_zh || ""} ${copy.summary_zh || ""}`;
   if (zh.includes("尚未完成中文翻译") || zh.includes("ordinary ai news 信号") || zh.includes("相关 ordinary")) {
     delete copy.title_zh;
@@ -44,8 +46,8 @@ function shouldShow(row: Record<string, unknown>) {
 export async function GET() {
   try {
     const rows = await getDb().select().from(alerts).orderBy(desc(alerts.publishedAt)).limit(500);
-    return Response.json(mergeAlerts([...seed, ...rows.map(r => JSON.parse(r.payload))]));
+    return Response.json(mergeAlerts([...rows.map(r => JSON.parse(r.payload)), ...seed]));
   } catch {
-    return Response.json(seed);
+    return Response.json(mergeAlerts(seed));
   }
 }

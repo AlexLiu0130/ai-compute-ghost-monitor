@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyze, applySemanticJudgment } from "../app/lib/ghost.ts";
 
-test("weighted ghost rules separate strong events from weak holdings news", () => {
+test("rules identify candidates but reserve alerts for evidence-bound semantic review", () => {
   const overcapacity = analyze({
     title: "Meta reportedly plans to sell excess AI compute capacity",
     summary: "Low utilization and excess compute raise concerns about AI capex return on investment.",
@@ -10,7 +10,8 @@ test("weighted ghost rules separate strong events from weak holdings news", () =
     symbols: ["META", "NVDA"],
   });
   assert.equal(overcapacity.ghost_type, "compute_overcapacity");
-  assert.equal(overcapacity.alert_level, "alert");
+  assert.equal(overcapacity.alert_level, "watch");
+  assert.ok(overcapacity.ghost_score < 65);
 
   const holding = analyze({
     title: "PFG Investments LLC Has $36.84 Million Position in Amazon.com, Inc. $AMZN",
