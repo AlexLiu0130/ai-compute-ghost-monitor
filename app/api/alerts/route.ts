@@ -45,7 +45,11 @@ function shouldShow(row: Record<string, unknown>) {
 
 export async function GET() {
   try {
-    const rows = await getDb().select().from(alerts).orderBy(desc(alerts.publishedAt)).limit(500);
+    const rows = await getDb()
+      .select({ payload: alerts.payload, publishedAt: alerts.publishedAt })
+      .from(alerts)
+      .orderBy(desc(alerts.publishedAt))
+      .limit(500);
     const stored = rows.flatMap((row) => {
       try {
         const parsed = JSON.parse(row.payload);
