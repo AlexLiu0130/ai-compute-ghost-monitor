@@ -121,7 +121,7 @@ test("dual-agent harness runs one analysis and one bounded critique", async () =
   assert.notEqual(fallback.alert_level, "alert");
 });
 
-test("failed critique removes unreviewed model evidence and impacts", async () => {
+test("failed critique preserves validated analysis but cannot trigger an alert", async () => {
   const { reviewEvent } = await import(new URL("../app/lib/agent-harness.ts", import.meta.url).href);
   const { scoreEvent, shouldCritique } = await import(new URL("../app/lib/scoring.ts", import.meta.url).href);
   const row = { title: "Meta offers unused GPU capacity", summary: "Meta is offering spare GPU clusters after internal AI demand missed plan.", source: "Reuters", symbols: ["META", "NVDA"] };
@@ -131,10 +131,11 @@ test("failed critique removes unreviewed model evidence and impacts", async () =
   globalThis.fetch = async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: calls++ === 0 ? JSON.stringify(analysis) : "{}" } }] }) });
   try {
     const result = await reviewEvent({ ...row }, "test-key", scoreEvent, shouldCritique, true);
-    assert.equal(result.analysis_method, "rules_fallback");
-    assert.deepEqual(result.evidence, []);
-    assert.equal(result.score_critique.llmFeatures, null);
-    assert.ok(result.ghost_score <= 39);
+    assert.equal(result.analysis_method, "llm_unreviewed");
+    assert.ok(result.evidence.length > 0);
+    assert.ok(result.score_critique.llmFeatures);
+    assert.ok(result.ghost_score <= 59);
+    assert.notEqual(result.alert_level, "alert");
   } finally {
     globalThis.fetch = originalFetch;
   }

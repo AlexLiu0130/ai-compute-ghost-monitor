@@ -66,7 +66,6 @@ async function complete(key: string, messages: ReturnType<typeof analysisMessage
 }
 
 export async function reviewEvent(row: Row, key: string | undefined, scoreEvent: ScoreEvent, shouldCritique: ShouldCritique, enabled = true) {
-  const baseRow = { ...row };
   if (!enabled) return fallback(row, "analysis", "skipped", "not_candidate");
   if (!key) return fallback(row, "analysis", "skipped", "missing_deepseek_key");
   const started = Date.now();
@@ -87,8 +86,14 @@ export async function reviewEvent(row: Row, key: string | undefined, scoreEvent:
     addTrace(row, "critique", { prompt: "critique", version: AGENT_PROMPT_VERSION, model: MODEL, durationMs: Date.now() - critiqueStarted, status: "ok", toolBudget: { ...TOOL_BUDGET } });
     return Object.assign(row, scoreEvent(row, analysis, critique));
   } catch (error) {
-    const trace = row.agent_trace;
-    Object.assign(row, scoreEvent(baseRow), { agent_trace: trace });
-    return fallback(row, "critique", "failed", errorText(error), Date.now() - critiqueStarted);
+    const score = Math.min(59, Number(preliminary.ghost_score || 0));
+    const alertLevel = score >= 35 ? "watch" : "log";
+    Object.assign(row, preliminary, {
+      ghost_score: score, relevance_score: score, priorityScore: score,
+      alert_level: alertLevel, alertLevel, analysis_method: "llm_unreviewed",
+      rationale: [...(Array.isArray(preliminary.rationale) ? preliminary.rationale : []), `agent_critique=failed:${errorText(error)}`, "unreviewed_analysis_cap=59"],
+    });
+    addTrace(row, "critique", { prompt: "critique", version: AGENT_PROMPT_VERSION, model: MODEL, durationMs: Date.now() - critiqueStarted, status: "failed", error: errorText(error), toolBudget: { ...TOOL_BUDGET } });
+    return row;
   }
 }
