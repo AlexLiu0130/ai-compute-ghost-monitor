@@ -1,6 +1,4 @@
-import { desc } from "drizzle-orm";
-import { getDb } from "../../../db";
-import { alerts } from "../../../db/schema";
+import { env } from "cloudflare:workers";
 import seed from "../../data/seed-alerts.json";
 
 function sortTime(row: Record<string, unknown>) {
@@ -45,11 +43,9 @@ function shouldShow(row: Record<string, unknown>) {
 
 export async function GET() {
   try {
-    const rows = await getDb()
-      .select({ payload: alerts.payload, publishedAt: alerts.publishedAt })
-      .from(alerts)
-      .orderBy(desc(alerts.publishedAt))
-      .limit(500);
+    if (!env.DB) throw new Error("D1 binding unavailable");
+    const result = await env.DB.prepare("SELECT payload FROM alerts ORDER BY published_at DESC LIMIT 500").all<{ payload: string }>();
+    const rows = result.results || [];
     const stored = rows.flatMap((row) => {
       try {
         const parsed = JSON.parse(row.payload);
