@@ -107,7 +107,15 @@ async function legacyStoredRows(db: D1Database, limit: number) {
 }
 
 async function staleImpactRows(db: D1Database, limit: number) {
-  const result = await db.prepare("SELECT payload FROM alerts ORDER BY published_at DESC LIMIT 600").all<{ payload: string }>();
+  const result = await db.prepare(`
+    SELECT payload FROM alerts
+    WHERE payload NOT LIKE '%"market_impact":%'
+       OR payload LIKE '%"market_impact":[]%'
+       OR payload LIKE '%"pending":"waiting_for_reaction_close"%'
+       OR payload LIKE '%"error":"price %'
+    ORDER BY published_at DESC
+    LIMIT 200
+  `).all<{ payload: string }>();
   const rows: Row[] = [];
   for (const item of result.results || []) {
     try {
