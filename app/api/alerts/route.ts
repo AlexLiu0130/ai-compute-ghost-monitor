@@ -44,8 +44,16 @@ function shouldShow(row: Record<string, unknown>) {
 export async function GET() {
   try {
     if (!env.DB) throw new Error("D1 binding unavailable");
-    const result = await env.DB.prepare("SELECT payload FROM alerts ORDER BY published_at DESC LIMIT 2000").all<{ payload: string }>();
-    const rows = result.results || [];
+    const recent = await env.DB.prepare("SELECT payload FROM alerts ORDER BY published_at DESC LIMIT 1600").all<{ payload: string }>();
+    let historical: Array<{ payload: string }> = [];
+    try {
+      const result = await env.DB.prepare(`SELECT alerts.payload FROM alerts
+        INNER JOIN history_reprocess ON history_reprocess.key = alerts.key`).all<{ payload: string }>();
+      historical = result.results || [];
+    } catch {
+      // Fresh installs have no history table until the first reprocess run.
+    }
+    const rows = [...(recent.results || []), ...historical];
     const stored = rows.flatMap((row) => {
       try {
         const parsed = JSON.parse(row.payload);
