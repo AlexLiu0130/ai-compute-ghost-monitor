@@ -4,6 +4,7 @@ import { alerts } from "../../db/schema";
 import seed from "../data/seed-alerts.json";
 import { reviewEvent } from "./agent-harness";
 import { normalizeArticle } from "./ghost";
+import { enrichMarketImpact, marketImpactNeedsRefresh } from "./market-impact";
 import { recoverTruncatedFeed } from "./qveris-result";
 import { scoreEvent, shouldCritique } from "./scoring";
 
@@ -15,6 +16,7 @@ const WRITE_BATCH = 1;
 const AGENT_CANDIDATE_LIMIT = 24;
 const AGENT_CONCURRENCY = 6;
 const LEGACY_REVIEW_LIMIT = 2;
+const IMPACT_REFRESH_LIMIT = 6;
 
 type CaptureEnv = {
   DB?: D1Database;
@@ -102,6 +104,26 @@ async function legacyStoredRows(db: D1Database, limit: number) {
     if (rows.length >= limit) break;
   }
   return rows;
+}
+
+async function staleImpactRows(db: D1Database, limit: number) {
+  const result = await db.prepare("SELECT payload FROM alerts ORDER BY published_at DESC LIMIT 600").all<{ payload: string }>();
+  const rows: Row[] = [];
+  for (const item of result.results || []) {
+    try {
+      const row = JSON.parse(item.payload) as Row;
+      if (marketImpactNeedsRefresh(row)) rows.push(row);
+    } catch {
+      // Malformed rows remain visible through the API fallback and are not rewritten here.
+    }
+    if (rows.length >= limit) break;
+  }
+  return rows;
+}
+
+async function refreshMarketImpacts(rows: Row[]) {
+  const results = await Promise.all(rows.map((row) => enrichMarketImpact(row)));
+  return results.filter(Boolean).length;
 }
 
 async function translateRows(rows: Row[], key?: string) {
@@ -243,7 +265,13 @@ export async function runCapture(env: CaptureEnv) {
     ? [...storedLegacy, ...seedLegacy].map((row) => scoreEvent(row)) : [];
   const reviewedLegacy = await judgeRows(legacy, env.DEEPSEEK_API_KEY);
   const migrated = await translateRows(reviewedLegacy, env.DEEPSEEK_API_KEY);
-  const writeRows = [...rows, ...migrated];
+  const currentRows = [...rows, ...migrated];
+  const freshImpactRows = currentRows.filter((row) => marketImpactNeedsRefresh(row)).slice(0, IMPACT_REFRESH_LIMIT);
+  const refreshedFresh = await refreshMarketImpacts(freshImpactRows);
+  const currentKeys = new Set(currentRows.map(keyOf));
+  const staleRows = (await staleImpactRows(env.DB, IMPACT_REFRESH_LIMIT)).filter((row) => !currentKeys.has(keyOf(row)));
+  const refreshedStale = await refreshMarketImpacts(staleRows);
+  const writeRows = [...currentRows, ...staleRows];
 
   await storeRows(env.DB, writeRows);
 
@@ -252,6 +280,7 @@ export async function runCapture(env: CaptureEnv) {
     captured: rows.length,
     stored: writeRows.length,
     migrated: migrated.length,
+    impacts_refreshed: refreshedFresh + refreshedStale,
     mode: "global",
     errors,
     ts: new Date().toISOString(),
