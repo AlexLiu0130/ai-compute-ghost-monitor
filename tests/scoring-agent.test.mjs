@@ -93,6 +93,17 @@ test("semantic features are evidence-bound and critic downgrade changes the resu
   assert.equal(downgraded.impacts.some(({ ticker }) => ticker === "NVDA"), false);
 });
 
+test("QVeris truncated results recover only complete feed entries", async () => {
+  const { recoverTruncatedFeed } = await import(new URL("../app/lib/qveris-result.ts", import.meta.url).href);
+  const prefix = '{"items":"3","feed":[{"title":"one","summary":"brace } in text"},{"title":"two","nested":{"ok":true}},{"title":"incomplete"';
+  assert.deepEqual(recoverTruncatedFeed(prefix), [
+    { title: "one", summary: "brace } in text" },
+    { title: "two", nested: { ok: true } },
+  ]);
+  assert.deepEqual(recoverTruncatedFeed('{"feed":[{"title":"complete"}]}'), [{ title: "complete" }]);
+  assert.deepEqual(recoverTruncatedFeed("error code: 1003"), []);
+});
+
 test("dual-agent harness runs one analysis and one bounded critique", async () => {
   const { reviewEvent } = await import(new URL("../app/lib/agent-harness.ts", import.meta.url).href);
   const { scoreEvent, shouldCritique } = await import(new URL("../app/lib/scoring.ts", import.meta.url).href);

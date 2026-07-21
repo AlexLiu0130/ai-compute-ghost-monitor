@@ -4,6 +4,7 @@ import { alerts } from "../../db/schema";
 import seed from "../data/seed-alerts.json";
 import { reviewEvent } from "./agent-harness";
 import { normalizeArticle } from "./ghost";
+import { recoverTruncatedFeed } from "./qveris-result";
 import { scoreEvent, shouldCritique } from "./scoring";
 
 const TOOL = "alphavantage.news_sentiment.query.v1.467a92c0";
@@ -145,12 +146,23 @@ async function fetchFeed(env: CaptureEnv, parameters: Record<string, string>) {
     body: JSON.stringify({ tool_id: TOOL, parameters }),
   });
   if (!response.ok) throw new Error(`QVeris HTTP ${response.status}`);
-  const payload = await response.json() as { result?: { data?: { feed?: unknown[] }; content?: { feed?: unknown[] }; full_content_file_url?: string } };
+  const payload = await response.json() as { result?: { data?: { feed?: unknown[] }; content?: { feed?: unknown[] }; full_content_file_url?: string; truncated_content?: string } };
   let content = payload.result?.data || payload.result?.content || {};
   if (!content.feed && payload.result?.full_content_file_url) {
-    content = await (await fetch(payload.result.full_content_file_url)).json();
+    try {
+      const full = await fetch(payload.result.full_content_file_url, { signal: AbortSignal.timeout(10_000) });
+      if (!full.ok) throw new Error(`full result HTTP ${full.status}`);
+      content = await full.json() as { feed?: unknown[] };
+    } catch {
+      const recovered = recoverTruncatedFeed(payload.result.truncated_content);
+      if (recovered.length) return recovered;
+    }
   }
-  return list(content.feed);
+  const feed = list(content.feed);
+  if (feed.length) return feed;
+  const recovered = recoverTruncatedFeed(payload.result?.truncated_content);
+  if (recovered.length) return recovered;
+  throw new Error("QVeris returned no readable feed");
 }
 
 export async function runCapture(env: CaptureEnv) {
