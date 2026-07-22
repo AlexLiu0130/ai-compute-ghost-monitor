@@ -176,6 +176,91 @@
         </div>
       </section>
 
+      <section class="agent-architecture shell">
+        <div class="section-copy">
+          <span class="section-kicker">AGENT ARCHITECTURE</span>
+          <h2
+            data-zh="双 Agent 判断，<br>确定性系统裁决。"
+            data-en="Two agents reason.<br>Deterministic code decides."
+          >
+            双 Agent 判断，<br />确定性系统裁决。
+          </h2>
+          <p
+            data-zh="大模型负责理解语义和提出证据，代码负责验证、打分、限幅与持久化。模型不能直接决定是否报警。"
+            data-en="The LLM interprets semantics and proposes evidence. Code validates, scores, caps, and persists the result. The model cannot trigger an alert directly."
+          >
+            大模型负责理解语义和提出证据，代码负责验证、打分、限幅与持久化。模型不能直接决定是否报警。
+          </p>
+        </div>
+
+        <div class="agent-flow" aria-label="Dual-agent scoring architecture">
+          <article>
+            <small>01 · INPUT GATE</small>
+            <strong data-zh="不可信新闻输入" data-en="Untrusted news input">不可信新闻输入</strong>
+            <span data-zh="限制长度 · 固定字段 · 候选筛选" data-en="Bounded text · fixed fields · candidate filter">限制长度 · 固定字段 · 候选筛选</span>
+          </article>
+          <i class="agent-link" aria-hidden="true"><span></span></i>
+          <article class="agent-node">
+            <small>02 · ANALYST AGENT</small>
+            <strong data-zh="语义分析" data-en="Semantic analysis">语义分析</strong>
+            <span data-zh="事件类型 · 强度 · 证据 · 标的链路" data-en="Event type · strength · evidence · ticker path">事件类型 · 强度 · 证据 · 标的链路</span>
+          </article>
+          <i class="agent-link" aria-hidden="true"><span></span></i>
+          <article class="code-node">
+            <small>03 · SCORE ENGINE</small>
+            <strong data-zh="100 分确定性评分" data-en="Deterministic 100-point score">100 分确定性评分</strong>
+            <span data-zh="硬门槛 · 权重 · 惩罚 · 上限" data-en="Hard gates · weights · penalties · caps">硬门槛 · 权重 · 惩罚 · 上限</span>
+          </article>
+          <i class="agent-link" aria-hidden="true"><span></span></i>
+          <article class="agent-node">
+            <small>04 · CRITIC AGENT</small>
+            <strong data-zh="独立质疑" data-en="Independent critique">独立质疑</strong>
+            <span data-zh="确认 · 降级 · 拒绝 · 删除无依据标的" data-en="Confirm · downgrade · reject · remove unsupported tickers">确认 · 降级 · 拒绝 · 删除无依据标的</span>
+          </article>
+          <i class="agent-link" aria-hidden="true"><span></span></i>
+          <article class="memory-node">
+            <small>05 · D1 MEMORY</small>
+            <strong data-zh="持久化与市场验证" data-en="Persistence and market validation">持久化与市场验证</strong>
+            <span data-zh="唯一键去重 · Agent trace · 收盘价回补" data-en="Unique-key dedupe · agent trace · close-price backfill">唯一键去重 · Agent trace · 收盘价回补</span>
+          </article>
+        </div>
+
+        <div class="agent-contracts">
+          <article>
+            <small>PROMPT</small>
+            <h3 data-zh="证据约束" data-en="Evidence bound">证据约束</h3>
+            <p
+              data-zh="只能引用标题和摘要中的原文；网页内容被视为不可信数据，不能变成指令。"
+              data-en="Agents may quote only the supplied title and summary. Article content is untrusted data, never an instruction."
+            >只能引用标题和摘要中的原文；网页内容被视为不可信数据，不能变成指令。</p>
+          </article>
+          <article>
+            <small>HARNESS</small>
+            <h3 data-zh="结构与边界校验" data-en="Schema and boundary checks">结构与边界校验</h3>
+            <p
+              data-zh="严格 JSON、标的白名单、证据逐字匹配、超时与失败降级；未复核结果最高 59 分。"
+              data-en="Strict JSON, ticker allowlist, verbatim evidence checks, timeouts, and fallbacks. Unreviewed results are capped at 59."
+            >严格 JSON、标的白名单、证据逐字匹配、超时与失败降级；未复核结果最高 59 分。</p>
+          </article>
+          <article>
+            <small>TOOLS</small>
+            <h3 data-zh="最小工具权限" data-en="Minimal tool access">最小工具权限</h3>
+            <p
+              data-zh="QVeris 获取新闻，DeepSeek Agent 不允许调用工具，行情模块只在收盘后获取日线。"
+              data-en="QVeris retrieves news, DeepSeek agents receive no tool access, and daily bars are fetched only after session close."
+            >QVeris 获取新闻，DeepSeek Agent 不允许调用工具，行情模块只在收盘后获取日线。</p>
+          </article>
+          <article>
+            <small>MEMORY</small>
+            <h3 data-zh="可追踪的事件记忆" data-en="Traceable event memory">可追踪的事件记忆</h3>
+            <p
+              data-zh="D1 保存原始新闻、双语文本、评分版本、Agent trace、方向和历史价格反应。"
+              data-en="D1 stores source news, bilingual text, scoring version, agent trace, direction, and historical price reaction."
+            >D1 保存原始新闻、双语文本、评分版本、Agent trace、方向和历史价格反应。</p>
+          </article>
+        </div>
+      </section>
+
       <section class="implementation shell">
         <div class="section-copy">
           <span class="section-kicker">IMPLEMENTATION</span>
@@ -220,7 +305,7 @@
                 翻译缓存保证中英文一致；规则与大模型共同判断鬼故事类型、可信度与强度。
               </p>
             </div>
-            <code>translator.py · scorer.py</code>
+            <code>agent-harness.ts · scoring.ts</code>
           </li>
           <li>
             <b>03</b>
@@ -236,7 +321,7 @@
                 ETF，逐层给出方向。
               </p>
             </div>
-            <code>universe.py · rules.py</code>
+            <code>agent-prompts.ts · scoring.ts</code>
           </li>
           <li>
             <b>04</b>
@@ -251,7 +336,7 @@
                 反应交易日收盘后拉取日线，计算前收、反应收盘、次日与三交易日表现。
               </p>
             </div>
-            <code>market_impact.py</code>
+            <code>market-impact.ts · D1</code>
           </li>
         </ol>
       </section>

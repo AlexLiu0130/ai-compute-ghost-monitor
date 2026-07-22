@@ -40,8 +40,23 @@ async function loadGitHubStars() {
   }
 }
 
+function setupAgentMotion() {
+  const section = document.querySelector(".agent-architecture");
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  if (!section || reducedMotion.matches || !("IntersectionObserver" in window)) return;
+
+  section.classList.add("motion-ready");
+  const observer = new IntersectionObserver((entries) => {
+    if (!entries[0]?.isIntersecting) return;
+    section.classList.add("is-active");
+    observer.disconnect();
+  }, { threshold: 0.24 });
+  observer.observe(section);
+}
+
 applyLanguage(lang);
 document.querySelectorAll(".language-toggle").forEach((button) => {
   button.addEventListener("click", () => applyLanguage(localStorage.getItem("ghost-lang") === "zh" ? "en" : "zh"));
 });
 loadGitHubStars();
+setupAgentMotion();
