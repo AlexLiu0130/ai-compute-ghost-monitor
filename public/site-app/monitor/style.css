@@ -393,6 +393,19 @@ body {
   background: linear-gradient(180deg, var(--bg-2) 75%, transparent);
 }
 
+.feed-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 10px 0 4px;
+  color: var(--faint);
+  font: 500 11px var(--mono);
+}
+
+.feed-page-btn { color: var(--watch); border-color: rgba(242, 204, 96, 0.35); }
+.feed-page-btn:disabled { opacity: 0.35; cursor: default; }
+
 /* skeleton shimmer */
 
 .row.skeleton {

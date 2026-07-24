@@ -93,7 +93,18 @@ const LAYER_EN = {
   memory_storage: "Memory / Storage",
 };
 
-const state = { alerts: [], filter: "all", selected: null, lang: localStorage.getItem("ghost-lang") || "zh" };
+const FEED_PAGE_SIZE = 50;
+const state = {
+  alerts: [],
+  filter: "all",
+  selected: null,
+  lang: localStorage.getItem("ghost-lang") || "zh",
+  meta: { total: 0, counts: { alert: 0, watch: 0, log: 0 } },
+  cursor: null,
+  nextCursor: null,
+  previousCursors: [],
+  loading: false,
+};
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -356,9 +367,7 @@ function dayBucket(iso) {
 }
 
 function renderFeed() {
-  const rows = sortAlerts(state.alerts).filter(
-    (a) => (state.lang === "en" || a.title_zh) && (state.filter === "all" || a.alert_level === state.filter)
-  );
+  const rows = sortAlerts(state.alerts).filter((a) => state.lang === "en" || a.title_zh);
   const feed = $("#feed");
   if (!rows.length) {
     feed.innerHTML = `<div class="feed-empty">${ui("暂无信号", "No signals")}</div>`;
@@ -390,7 +399,13 @@ function renderFeed() {
         </div>
       </button>`;
     })
-    .join("");
+    .join("") + (state.previousCursors.length || state.nextCursor
+      ? `<div class="feed-pagination">
+          <button type="button" class="chip feed-page-btn" data-page="previous" ${state.previousCursors.length ? "" : "disabled"}>${ui("上一页", "Previous")}</button>
+          <span>${ui("第", "Page ")}${state.previousCursors.length + 1}${ui("页", "")}</span>
+          <button type="button" class="chip feed-page-btn" data-page="next" ${state.nextCursor ? "" : "disabled"}>${ui("下一页", "Next")}</button>
+        </div>`
+      : "");
 }
 
 /* ---------- detail ---------- */
@@ -516,9 +531,8 @@ function rawView(a) {
 /* ---------- topbar ---------- */
 
 function renderStats() {
-  const counts = { alert: 0, watch: 0, log: 0 };
-  for (const a of state.alerts) counts[a.alert_level] = (counts[a.alert_level] || 0) + 1;
-  $("#count-total").textContent = state.alerts.length;
+  const counts = state.meta.counts;
+  $("#count-total").textContent = state.meta.total;
   $("#count-alert").textContent = counts.alert;
   $("#count-watch").textContent = counts.watch;
   $("#count-log").textContent = counts.log;
@@ -534,7 +548,7 @@ function renderStats() {
   document.title = ui("AI 算力鬼故事监控", "AI Compute Ghost Monitor");
   $("#lang-btn").textContent = state.lang === "zh" ? "EN" : "中文";
   $("#lang-btn").title = ui("Switch to English", "切换到中文");
-  const chipCounts = { all: state.alerts.length, alert: counts.alert, watch: counts.watch, log: counts.log };
+  const chipCounts = { all: state.meta.total, alert: counts.alert, watch: counts.watch, log: counts.log };
   const chipNames = { all: ui("全部", "All"), alert: ui("警报", "Alert"), watch: ui("观察", "Watch"), log: ui("记录", "Log") };
   for (const key of Object.keys(chipCounts)) {
     document.querySelector(`[data-level="${key}"]`).innerHTML = `${chipNames[key]} <span class="n">${chipCounts[key]}</span>`;
@@ -551,7 +565,8 @@ function renderStats() {
   $("#hint-symbols").textContent = ui("逗号分隔", "comma-separated");
   $("#analyze-btn").textContent = ui("开始分析", "Analyze");
   $("#analyze-empty").textContent = ui("结果预览", "Result preview");
-  $("#monitor-empty") && ($("#monitor-empty").textContent = ui("选择一条信号", "Select a signal"));
+  const monitorEmpty = $("#monitor-empty");
+  if (monitorEmpty) monitorEmpty.textContent = ui("选择一条信号", "Select a signal");
   document.querySelector('#analyze-form [name="title"]').placeholder = ui("据报道 Meta 计划出售多余的 AI 算力", "Meta reportedly plans to sell excess AI compute");
   document.querySelector('#analyze-form [name="summary"]').placeholder = ui("这条消息可能引发市场对 AI 基础设施产能过剩的担忧。", "The report may revive concerns about excess AI infrastructure capacity.");
   document.querySelector('#analyze-form [name="source"]').placeholder = "Reuters / Bloomberg";
@@ -560,7 +575,9 @@ function renderStats() {
 
 /* ---------- data ---------- */
 
-async function loadAlerts() {
+async function loadAlerts(cursor = state.cursor, force = false) {
+  if (state.loading) return false;
+  state.loading = true;
   const btn = $("#refresh-btn");
   btn.classList.add("spinning");
   if (!state.alerts.length) {
@@ -572,22 +589,48 @@ async function loadAlerts() {
       </div>`).join("");
   }
   try {
-    const res = await fetch(`/api/alerts?t=${Date.now()}`);
+    const params = new URLSearchParams({ limit: String(FEED_PAGE_SIZE) });
+    if (state.filter !== "all") params.set("level", state.filter);
+    if (cursor) params.set("cursor", cursor);
+    const res = await fetch(`/api/alerts?${params}`, { cache: force ? "reload" : "default" });
     if (!res.ok) throw new Error(res.status);
-    state.alerts = await res.json();
-    $("#live-dot").classList.remove("dead");
-    if ((state.selected === null || !state.alerts[state.selected]) && state.alerts.length) {
-      state.selected = state.alerts.indexOf(sortAlerts(state.alerts)[0]);
+    const payload = await res.json();
+    if (Array.isArray(payload)) {
+      const all = sortAlerts(payload);
+      const counts = { alert: 0, watch: 0, log: 0 };
+      for (const alert of all) counts[alert.alert_level] = (counts[alert.alert_level] || 0) + 1;
+      state.alerts = all.filter((alert) => state.filter === "all" || alert.alert_level === state.filter).slice(0, FEED_PAGE_SIZE);
+      state.meta = { total: all.length, counts };
+      state.nextCursor = null;
+    } else {
+      state.alerts = Array.isArray(payload.rows) ? payload.rows : [];
+      state.meta = {
+        total: Number(payload.total || 0),
+        counts: {
+          alert: Number(payload.counts?.alert || 0),
+          watch: Number(payload.counts?.watch || 0),
+          log: Number(payload.counts?.log || 0),
+        },
+      };
+      state.nextCursor = payload.next_cursor || null;
     }
+    state.cursor = cursor;
+    state.selected = state.alerts.length ? state.alerts.indexOf(sortAlerts(state.alerts)[0]) : null;
+    $("#live-dot").classList.remove("dead");
     renderStats();
     renderFeed();
     if (state.selected !== null && state.alerts[state.selected]) {
       renderDetail(state.alerts[state.selected], $("#detail"));
+    } else {
+      $("#detail").innerHTML = `<div class="detail-empty">${ui("暂无信号", "No signals")}</div>`;
     }
-  } catch (err) {
+    return true;
+  } catch {
     $("#live-dot").classList.add("dead");
     $("#updated-at").textContent = ui("数据离线", "Data offline");
+    return false;
   } finally {
+    state.loading = false;
     btn.classList.remove("spinning");
   }
 }
@@ -600,6 +643,22 @@ async function loadCaptureStatus() {
 /* ---------- events ---------- */
 
 $("#feed").addEventListener("click", (e) => {
+  const pageButton = e.target.closest(".feed-page-btn");
+  if (pageButton) {
+    if (pageButton.dataset.page === "next" && state.nextCursor) {
+      const previous = state.cursor;
+      state.previousCursors.push(previous);
+      loadAlerts(state.nextCursor, true).then((ok) => {
+        if (!ok) state.previousCursors.pop();
+      });
+    } else if (pageButton.dataset.page === "previous" && state.previousCursors.length) {
+      const target = state.previousCursors.pop();
+      loadAlerts(target, true).then((ok) => {
+        if (!ok) state.previousCursors.push(target);
+      });
+    }
+    return;
+  }
   const row = e.target.closest(".row");
   if (!row) return;
   const idx = Number(row.dataset.idx);
@@ -611,17 +670,20 @@ $("#feed").addEventListener("click", (e) => {
   renderDetail(state.alerts[state.selected], $("#detail"));
 });
 
-$("#filters").addEventListener("click", (e) => {
+$("#filters").addEventListener("click", async (e) => {
   const chip = e.target.closest(".chip");
   if (!chip) return;
   state.filter = chip.dataset.level;
+  state.cursor = null;
+  state.nextCursor = null;
+  state.previousCursors = [];
   document.querySelectorAll("#filters .chip").forEach((c) =>
     c.classList.toggle("active", c === chip)
   );
-  renderFeed();
+  await loadAlerts(null, true);
 });
 
-$("#refresh-btn").addEventListener("click", loadAlerts);
+$("#refresh-btn").addEventListener("click", () => loadAlerts(state.cursor, true));
 
 // “+N 更多”展开折叠的标的（详情区每次重渲染，用委托监听）
 document.addEventListener("click", (e) => {
@@ -658,7 +720,8 @@ $("#lang-btn").addEventListener("click", () => {
 });
 
 $("#capture-btn").addEventListener("click", async () => {
-  await loadAlerts();
+  state.previousCursors = [];
+  await loadAlerts(null, true);
   await loadCaptureStatus();
 });
 
@@ -702,7 +765,9 @@ $("#analyze-form").addEventListener("submit", async (e) => {
   }
 });
 
-loadAlerts();
+loadAlerts(null);
 loadCaptureStatus();
-setInterval(loadAlerts, 60000);
-setInterval(loadCaptureStatus, 60000);
+setInterval(() => {
+  if (!document.hidden && state.cursor === null) loadAlerts(null);
+}, 300000);
+setInterval(loadCaptureStatus, 300000);

@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const activeJs = new URL("../public/site-app/monitor/main.js", import.meta.url);
+const monitorHtml = new URL("../public/site-app/monitor/index.html", import.meta.url);
 const alertsRoute = new URL("../app/api/alerts/route.ts", import.meta.url);
 const developerPage = new URL("../public/site-app/developer.html", import.meta.url);
 const siteCss = new URL("../public/site-app/site.css", import.meta.url);
@@ -24,10 +25,21 @@ test("monitor does not present legacy probabilities as forecasts", async () => {
   assert.match(await readFile(alertsRoute, "utf8"), /delete copy\.ml_predictions/);
 });
 
+test("large alert archives use bounded cursor pages and reuse HTTP cache", async () => {
+  const source = await readFile(activeJs, "utf8");
+  assert.match(source, /const FEED_PAGE_SIZE = 50/);
+  assert.match(source, /params\.set\("cursor", cursor\)/);
+  assert.match(source, /class="chip feed-page-btn"/);
+  assert.match(source, /fetch\(`\/api\/alerts\?\$\{params\}`/);
+  assert.doesNotMatch(source, /api\/alerts\?t=/);
+  assert.match(await readFile(alertsRoute, "utf8"), /ORDER BY sort_time DESC, key DESC\s+LIMIT \?/);
+  assert.match(await readFile(monitorHtml, "utf8"), /main\.js\?v=3/);
+});
+
 test("one malformed stored alert cannot force the entire API back to seed data", async () => {
   const source = await readFile(alertsRoute, "utf8");
-  assert.match(source, /rows\.flatMap/);
-  assert.match(source, /JSON\.parse\(row\.payload\)/);
+  assert.match(source, /pageRecords\.flatMap/);
+  assert.match(source, /JSON\.parse\(record\.payload\)/);
   assert.match(source, /catch \{\s*return \[\];/);
 });
 

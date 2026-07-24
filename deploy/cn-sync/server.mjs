@@ -1,10 +1,13 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const MAX_BODY_BYTES = 12 * 1024 * 1024;
+const DEFAULT_LIMIT = 50;
+const MAX_LIMIT = 100;
+const LEVELS = new Set(["alert", "watch", "log"]);
 
 export function keyOf(row) {
   return String(row?.url || `${row?.published_at || ""}:${row?.title || ""}`);
@@ -26,7 +29,72 @@ export function mergeRows(existing, incoming) {
     const key = keyOf(row);
     if (key) merged.set(key, row);
   }
-  return [...merged.values()].sort((a, b) => sortTime(b) - sortTime(a));
+  return [...merged.values()].sort((a, b) => sortTime(b) - sortTime(a) || keyOf(b).localeCompare(keyOf(a)));
+}
+
+function shouldShow(row) {
+  return row?.ghost_type !== "ordinary_ai_news" || Number(row?.ghost_score || 0) >= 20;
+}
+
+function encodeCursor(row) {
+  return encodeURIComponent(JSON.stringify([sortTime(row), keyOf(row)]));
+}
+
+function decodeCursor(value) {
+  if (!value || value.length > 4096) return null;
+  try {
+    const parsed = JSON.parse(decodeURIComponent(value));
+    return Array.isArray(parsed) && parsed.length === 2 &&
+      Number.isFinite(Number(parsed[0])) && typeof parsed[1] === "string"
+      ? { time: Number(parsed[0]), key: parsed[1] }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function buildSnapshot(rows, state = {}) {
+  const visible = rows.filter(shouldShow);
+  const byLevel = { alert: [], watch: [], log: [] };
+  for (const row of visible) {
+    if (LEVELS.has(row.alert_level)) byLevel[row.alert_level].push(row);
+  }
+  const revision = String(state.updated_at || `${visible[0]?.published_at || ""}:${visible.length}`);
+  return {
+    rows,
+    visible,
+    byLevel,
+    revision,
+    counts: {
+      alert: byLevel.alert.length,
+      watch: byLevel.watch.length,
+      log: byLevel.log.length,
+    },
+  };
+}
+
+export function paginateSnapshot(snapshot, { level = null, cursor = null, limit = DEFAULT_LIMIT } = {}) {
+  const source = level && LEVELS.has(level) ? snapshot.byLevel[level] : snapshot.visible;
+  let start = 0;
+  if (cursor) {
+    let end = source.length;
+    while (start < end) {
+      const middle = Math.floor((start + end) / 2);
+      const row = source[middle];
+      const time = sortTime(row);
+      if (time < cursor.time || (time === cursor.time && keyOf(row) < cursor.key)) end = middle;
+      else start = middle + 1;
+    }
+  }
+  const rows = source.slice(start, start + limit);
+  return {
+    version: 1,
+    revision: snapshot.revision,
+    total: snapshot.visible.length,
+    counts: snapshot.counts,
+    rows,
+    next_cursor: start + rows.length < source.length && rows.length ? encodeCursor(rows.at(-1)) : null,
+  };
 }
 
 function equalSecret(actual, expected) {
@@ -71,6 +139,20 @@ function reply(response, status, value) {
   response.end(`${JSON.stringify(value)}\n`);
 }
 
+function publicReply(request, response, value, cacheKey) {
+  const etag = `"${createHash("sha256").update(cacheKey).digest("base64url")}"`;
+  if (request.headers["if-none-match"] === etag) {
+    response.writeHead(304, { etag, "cache-control": "public, max-age=30, stale-while-revalidate=300" });
+    return response.end();
+  }
+  response.writeHead(200, {
+    "content-type": "application/json",
+    "cache-control": "public, max-age=30, stale-while-revalidate=300",
+    etag,
+  });
+  response.end(`${JSON.stringify(value)}\n`);
+}
+
 function log(event, fields = {}) {
   console.log(JSON.stringify({ ts: new Date().toISOString(), event, ...fields }));
 }
@@ -84,19 +166,46 @@ export function createSyncServer({
   if (!alertsFile) throw new Error("ALERTS_FILE is required");
 
   let writes = Promise.resolve();
+  let snapshotPromise;
+  const loadSnapshot = () => {
+    snapshotPromise ||= Promise.all([
+      readJson(alertsFile, []),
+      readJson(stateFile, {}),
+    ]).then(([rows, state]) => {
+      if (!Array.isArray(rows)) throw new Error("alerts file must contain an array");
+      return buildSnapshot(mergeRows([], rows), state);
+    });
+    return snapshotPromise;
+  };
+
   return createServer(async (request, response) => {
     const url = new URL(request.url || "/", "http://127.0.0.1");
 
     if (request.method === "GET" && url.pathname === "/health") {
       try {
-        const rows = await readJson(alertsFile, []);
+        const snapshot = await loadSnapshot();
         return reply(response, 200, {
           status: "ok",
-          count: Array.isArray(rows) ? rows.length : 0,
-          newest: Array.isArray(rows) && rows[0] ? rows[0].published_at || null : null,
+          count: snapshot.rows.length,
+          newest: snapshot.rows[0]?.published_at || null,
+          revision: snapshot.revision,
         });
       } catch (error) {
         return reply(response, 500, { error: error instanceof Error ? error.message : "health check failed" });
+      }
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/alerts") {
+      try {
+        const snapshot = await loadSnapshot();
+        const limit = Math.min(MAX_LIMIT, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "", 10) || DEFAULT_LIMIT));
+        const requestedLevel = url.searchParams.get("level");
+        const level = requestedLevel && LEVELS.has(requestedLevel) ? requestedLevel : null;
+        const cursor = decodeCursor(url.searchParams.get("cursor"));
+        const page = paginateSnapshot(snapshot, { level, cursor, limit });
+        return publicReply(request, response, page, `${snapshot.revision}:${level || "all"}:${cursor?.time || ""}:${cursor?.key || ""}:${limit}`);
+      } catch (error) {
+        return reply(response, 500, { error: error instanceof Error ? error.message : "read failed" });
       }
     }
 
@@ -127,15 +236,16 @@ export function createSyncServer({
         throw error;
       }
 
-      const existing = await readJson(alertsFile, []);
-      if (!Array.isArray(existing)) throw new Error("alerts file must contain an array");
-      const merged = mergeRows(existing, payload.rows);
-      await atomicJson(alertsFile, merged);
-      await atomicJson(stateFile, {
+      const current = await loadSnapshot();
+      const merged = mergeRows(current.rows, payload.rows);
+      const nextState = {
         idempotency_key: idempotencyKey,
         count: merged.length,
         updated_at: new Date().toISOString(),
-      });
+      };
+      await atomicJson(alertsFile, merged);
+      await atomicJson(stateFile, nextState);
+      snapshotPromise = Promise.resolve(buildSnapshot(merged, nextState));
       log("sync_applied", { received: payload.rows.length, count: merged.length });
       return { status: "applied", received: payload.rows.length, count: merged.length };
     };

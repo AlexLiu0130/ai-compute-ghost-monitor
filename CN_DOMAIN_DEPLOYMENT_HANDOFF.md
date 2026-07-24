@@ -151,7 +151,28 @@ location = /internal/sync/alerts {
 }
 ```
 
-保留现有静态 `/api/alerts` 和 `/api/capture` 限制，不要替换为 `.com` 反代。
+保留 `/api/capture` 禁用，不要替换为 `.com` 反代。`/api/alerts` 改为同机
+分页读取服务，禁止继续直接返回完整 `alerts.json`：
+
+```nginx
+gzip on;
+gzip_vary on;
+gzip_min_length 1024;
+gzip_types application/json;
+
+location = /api/alerts {
+    limit_except GET { deny all; }
+    proxy_pass http://127.0.0.1:8788;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+}
+```
+
+分页接口每次最多返回 100 条，默认 50 条，并自行发送 ETag 和
+`Cache-Control: public, max-age=30, stale-while-revalidate=300`。移除该路径
+原有的静态文件 `alias` 和 `Cache-Control: no-store`。同步接口和
+`/api/capture` 仍保持 `no-store`。
 
 ```bash
 sudo nginx -t
@@ -163,6 +184,17 @@ sudo systemctl reload nginx
 ```bash
 curl -i -X POST https://ghost.alexai-lab.cn/internal/sync/alerts
 ```
+
+分页读取验收：
+
+```bash
+curl --compressed -sS 'https://ghost.alexai-lab.cn/api/alerts?limit=2'
+curl --compressed -sSI 'https://ghost.alexai-lab.cn/api/alerts?limit=50'
+```
+
+第一条应返回对象结构 `{version, revision, total, counts, rows, next_cursor}`，
+且 `rows` 不超过 2 条。第二条应包含 `Content-Encoding: gzip`、`ETag` 和公共
+短缓存响应头，不能再返回数 MB 的完整历史数组。
 
 ## 二、配置并发布 `.com` 主站
 
@@ -208,16 +240,17 @@ CN_SYNC_TOKEN='<同步密钥>' \
 node scripts/push-cn-snapshot.mjs
 ```
 
-脚本从 `.com/api/alerts` 读取当前完整列表，并通过鉴权接口写入 `.cn`。不要在
-阿里云服务器执行，因为该服务器访问 `.com` 会收到 403。
+脚本按 100 条一页遍历 `.com/api/alerts`，并分批通过鉴权接口写入 `.cn`；
+历史规模增长不会形成单个超大请求。不要在阿里云服务器执行，因为该服务器
+访问 `.com` 会收到 403。
 
 重复执行相同快照是安全的：内容哈希和 upsert 会阻止重复记录。
 
 ## 四、验收
 
 ```bash
-curl -sS https://ghost.alexai-lab.cn/api/alerts \
-  | jq 'sort_by(.published_at) | reverse | .[0] | {published_at,title,source}'
+curl -sS 'https://ghost.alexai-lab.cn/api/alerts?limit=1' \
+  | jq '{total,counts,latest:(.rows[0] | {published_at,title,source}),next_cursor}'
 
 curl -sS http://127.0.0.1:8788/health
 sudo journalctl -u ghost-cn-sync --since "30 minutes ago"
@@ -226,7 +259,7 @@ sudo journalctl -u ghost-cn-sync --since "30 minutes ago"
 完成标准：
 
 - `.cn` 最新 `published_at` 与 `.com` 一致。
-- `.cn` 列表刷新后出现最新新闻；前端已有 60 秒自动刷新。
+- `.cn` 列表刷新后出现最新新闻；前端每 5 分钟刷新第一页。
 - 重复推送不会增加重复记录。
 - 错误 Token 返回 `401`。
 - `/api/capture` 在 `.cn` 仍不可用。
