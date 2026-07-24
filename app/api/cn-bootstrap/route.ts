@@ -17,7 +17,10 @@ export async function POST(request: Request) {
   if (!runtime.CN_BOOTSTRAP_TOKEN) {
     return Response.json({ error: "bootstrap endpoint is disabled" }, { status: 503 });
   }
-  const token = request.headers.get("x-cn-bootstrap-token") || "";
+  const formToken = request.headers.get("content-type")?.startsWith("application/x-www-form-urlencoded")
+    ? new URLSearchParams(await request.text()).get("token")
+    : null;
+  const token = request.headers.get("x-cn-bootstrap-token") || formToken || "";
   if (!await tokenMatches(token, runtime.CN_BOOTSTRAP_TOKEN)) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
