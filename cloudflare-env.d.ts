@@ -6,6 +6,5 @@ declare namespace Cloudflare {
     CAPTURE_TOKEN?: string;
     CN_SYNC_URL?: string;
     CN_SYNC_TOKEN?: string;
-    CN_BOOTSTRAP_TOKEN?: string;
   }
 }

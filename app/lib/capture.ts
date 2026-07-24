@@ -217,35 +217,6 @@ async function storeRows(binding: D1Database, rows: Row[]) {
   }
 }
 
-export async function bootstrapCnMirror(env: CaptureEnv) {
-  if (!env.DB) throw new Error("D1 binding DB is unavailable");
-  let offset = 0;
-  let synced = 0;
-  let batches = 0;
-  while (true) {
-    const result = await env.DB.prepare(
-      "SELECT payload FROM alerts ORDER BY published_at DESC LIMIT 100 OFFSET ?",
-    ).bind(offset).all<{ payload: string }>();
-    const items = result.results || [];
-    const rows = items.flatMap((item) => {
-      try {
-        const row = JSON.parse(item.payload);
-        return row && typeof row === "object" ? [row as Row] : [];
-      } catch {
-        return [];
-      }
-    });
-    if (rows.length) {
-      await syncCnMirror(env, rows);
-      synced += rows.length;
-      batches += 1;
-    }
-    if (items.length < 100) break;
-    offset += items.length;
-  }
-  return { status: "synced" as const, rows: synced, batches };
-}
-
 export async function runCapture(env: CaptureEnv) {
   if (!env.QVERIS_API_KEY) throw new Error("QVERIS_API_KEY is not configured");
   if (!env.DB) throw new Error("D1 binding DB is unavailable");

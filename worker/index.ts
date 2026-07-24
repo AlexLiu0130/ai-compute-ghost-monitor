@@ -11,7 +11,6 @@ interface Env {
   CAPTURE_TOKEN?: string;
   CN_SYNC_URL?: string;
   CN_SYNC_TOKEN?: string;
-  CN_BOOTSTRAP_TOKEN?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
