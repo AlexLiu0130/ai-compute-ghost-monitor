@@ -1,4 +1,5 @@
 export type Direction = "bullish" | "bearish" | "mixed" | "watch";
+export const SCORING_VERSION = "anchored-v4";
 export type ImpactTier = "direct" | "first_order" | "second_order";
 export type Evidence = { field: "title" | "summary"; quote: string; claim: string };
 export type EventAnalysis = {
@@ -60,6 +61,7 @@ const TYPES: Record<string, { keywords: Pattern[]; layers: LayerSpec; firstOrder
   order_inventory_weakness: { keywords: [{ term: "order cut", weight: 4 }, { term: "orders cut", weight: 4 }, { term: "cancelled order", weight: 3 }, { term: "backlog weakness", weight: 3 }, "inventory build", "lead time down", "selloff", "rout", "slump", "tumbling"], layers: { accelerator: "bearish", foundry_equipment_eda: "bearish", memory_storage: "bearish", server_infra: "bearish", basket: "bearish" }, firstOrder: ["accelerator", "foundry_equipment_eda", "memory_storage", "server_infra"] },
   hbm_shortage: { keywords: [{ term: "hbm shortage", weight: 4 }, { term: "memory shortage", weight: 3 }, { term: "sold out", weight: 3 }, "price hike", "allocation", "supply tight", "reserved supply"], layers: { memory_storage: "bullish", foundry_equipment_eda: "bullish", accelerator: "mixed", basket: "bullish" }, firstOrder: ["memory_storage", "accelerator"] },
   capacity_flood: { keywords: [{ term: "massive investment", weight: 3 }, { term: "capacity expansion", weight: 3 }, { term: "supply flood", weight: 3 }, "new fabs", "price war", "production capacity"], layers: { memory_storage: "bearish", foundry_equipment_eda: "bullish", accelerator: "bullish", basket: "mixed" }, firstOrder: ["memory_storage", "foundry_equipment_eda", "accelerator"] },
+  demand_order_strength: { keywords: [{ term: "record backlog", weight: 4 }, { term: "backlog reached a record", weight: 4 }, { term: "raises guidance", weight: 4 }, { term: "raises gross margin", weight: 4 }, { term: "gross margin outlook", weight: 3 }, { term: "margin guidance", weight: 3 }, { term: "strong ai demand", weight: 3 }, "orders surged", "order growth"], layers: { accelerator: "bullish", memory_storage: "bullish", server_infra: "bullish", basket: "bullish" }, firstOrder: ["accelerator", "memory_storage", "server_infra"] },
   data_center_delay: { keywords: [{ term: "data center delay", weight: 4 }, { term: "lease cancellation", weight: 3 }, { term: "power constraint", weight: 3 }, "permitting delay", "grid constraint"], layers: { hyperscaler: "bearish", compute_leasing: "bearish", server_infra: "mixed", power_cooling: "bullish" }, firstOrder: ["compute_leasing", "server_infra"] },
   financing_stress: { keywords: [{ term: "negative free cash flow", weight: 4 }, { term: "debt financing", weight: 3 }, { term: "refinancing", weight: 3 }, "equity raise", "customer concentration"], layers: { compute_leasing: "bearish", server_infra: "bearish", basket: "bearish" }, firstOrder: ["compute_leasing", "server_infra"] },
   capital_markets_memory: { keywords: [{ term: "ai memory trade", weight: 4 }, { term: "nasdaq listing", weight: 3 }, { term: "us listing", weight: 3 }, { term: "adr listing", weight: 3 }, "public offering"], layers: { memory_storage: "mixed", basket: "mixed" }, firstOrder: ["memory_storage"] },
@@ -167,16 +169,9 @@ export function scoreEvent(row: Row, analysisOrContext?: EventAnalysis | Context
   relevance = clamp(Math.round(relevance), 0, 100);
   if (!row.market) penalties.push("market_confirmation=pending");
   const directSymbols = valuesOf(row.directSymbols).map(textOf); const suppliedDirections = recordOf(row.tickerDirections);
-  const agentImpacts = valuesOf(analysis?.ticker_impacts).filter((impact): impact is TickerImpact => Boolean(impact && typeof impact === "object")).map((impact) => {
-    const ticker = impact.ticker.toUpperCase();
-    const layer = Object.entries(LAYERS).find(([, members]) => members.includes(ticker))?.[0];
-    const direct = (ALIASES[ticker] || []).some((alias) => text.includes(alias));
-    return {
-      ticker,
-      direction: layer && TYPES[ghostType]?.layers[layer] || impact.direction,
-      tier: direct ? "direct" : layer && TYPES[ghostType]?.firstOrder.includes(layer) ? "first_order" : "second_order",
-    } satisfies TickerImpact;
-  });
+  const agentImpacts = valuesOf(analysis?.ticker_impacts)
+    .filter((impact): impact is TickerImpact => Boolean(impact && typeof impact === "object"))
+    .map(({ ticker, direction, tier }) => ({ ticker: ticker.toUpperCase(), direction, tier }));
   const unsupported = new Set(valuesOf(critique?.unsupported_tickers).map(textOf).map((ticker) => ticker.toUpperCase()));
   const tickerImpacts = gates.length || conflicts.length || duplicateEvent ? [] : (agentImpacts.length ? agentImpacts : suppliedDirections ? Object.entries(suppliedDirections).map(([ticker, direction]) => ({ ticker, direction: direction as Direction, tier: directSymbols.includes(ticker) ? "direct" : ["SMH", "SOXX", "QQQ", "XLK"].includes(ticker) ? "second_order" : "first_order" } satisfies TickerImpact)) : impacts(ghostType, symbols, text)).filter(({ ticker }) => !unsupported.has(ticker));
   const alertLevel = conflicts.length ? "watch" : level(relevance);
@@ -186,7 +181,7 @@ export function scoreEvent(row: Row, analysisOrContext?: EventAnalysis | Context
     alert_level: alertLevel, alertLevel, ghost_type: ghostType, ticker_impacts: tickerImpacts, impacts: tickerImpacts, ticker_directions: Object.fromEntries(tickerImpacts.map(({ ticker, direction }) => [ticker, direction])),
     evidence, conflicts, rationale: [`type=${ghostType}`, "score_basis=deterministic_anchored_components", `rule_evidence=${classified.evidence}`, ...classified.hits.map((hit) => `keyword=${hit}`), ...gates, ...caps, ...penalties],
     score_critique: { inScope: !gates.length, hardGates: gates, penalties, caps, llmFeatures: analysis || null }, critique: { inScope: !gates.length, hardGates: gates, penalties, caps, llmFeatures: analysis || null },
-    ghost_score: relevance, alert_level_legacy: alertLevel, affected_layers: Object.keys(TYPES[ghostType]?.layers || {}), analysis_method: analysis ? "llm" : "deterministic_rules", scoring_method: analysis ? "deterministic_anchored_llm_labels" : "deterministic_rules", scoring_version: "anchored-v3",
+    ghost_score: relevance, alert_level_legacy: alertLevel, affected_layers: Object.keys(TYPES[ghostType]?.layers || {}), analysis_method: analysis ? "llm" : "deterministic_rules", scoring_method: analysis ? "deterministic_anchored_llm_labels" : "deterministic_rules", scoring_version: SCORING_VERSION,
   };
 }
 

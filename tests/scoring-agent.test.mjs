@@ -93,6 +93,27 @@ test("semantic features are evidence-bound and critic downgrade changes the resu
   assert.equal(downgraded.impacts.some(({ ticker }) => ticker === "NVDA"), false);
 });
 
+test("direct company direction follows evidence instead of a bearish layer default", async () => {
+  const { scoreEvent, SCORING_VERSION } = await import(new URL("../app/lib/scoring.ts", import.meta.url).href);
+  const row = {
+    title: "Supermicro raises gross-margin outlook as backlog reaches $60 billion",
+    summary: "Supermicro said its backlog reached a record $60 billion and raised expected gross margin to 15% to 17%.",
+    source: "Yahoo Finance",
+    symbols: ["SMCI"],
+  };
+  const analysis = {
+    event_type: "financing_stress", is_market_event: true, strength: 3, confidence: 3,
+    features: { event_actuality: 3, novelty: 2, surprise: 3, magnitude: 2, direct_exposure: 3, causal_strength: 3, breadth: 1, persistence: 2, uncertainty: 0 },
+    ticker_impacts: [{ ticker: "SMCI", direction: "bullish", tier: "direct" }],
+    evidence: [{ field: "summary", quote: "backlog reached a record $60 billion", claim: "record orders support the direct supplier" }], conflicts: [],
+  };
+  assert.equal(scoreEvent(row).ghost_type, "demand_order_strength");
+  const result = scoreEvent(row, analysis);
+  assert.equal(result.ticker_directions.SMCI, "bullish");
+  assert.equal(result.ticker_impacts[0].tier, "direct");
+  assert.equal(result.scoring_version, SCORING_VERSION);
+});
+
 test("QVeris truncated results recover only complete feed entries", async () => {
   const { recoverTruncatedFeed } = await import(new URL("../app/lib/qveris-result.ts", import.meta.url).href);
   const prefix = '{"items":"3","feed":[{"title":"one","summary":"brace } in text"},{"title":"two","nested":{"ok":true}},{"title":"incomplete"';
@@ -152,12 +173,12 @@ test("failed critique preserves validated analysis but cannot trigger an alert",
   }
 });
 
-test("analysis fallback is marked as v3 and cannot trigger an alert", async () => {
+test("analysis fallback uses the current scoring version and cannot trigger an alert", async () => {
   const { reviewEvent } = await import(new URL("../app/lib/agent-harness.ts", import.meta.url).href);
-  const { scoreEvent, shouldCritique } = await import(new URL("../app/lib/scoring.ts", import.meta.url).href);
+  const { SCORING_VERSION, scoreEvent, shouldCritique } = await import(new URL("../app/lib/scoring.ts", import.meta.url).href);
   const row = { title: "AI infrastructure update", summary: "No verified market event.", ghost_score: 81 };
   const result = await reviewEvent(row, undefined, scoreEvent, shouldCritique, true);
-  assert.equal(result.scoring_version, "anchored-v3");
+  assert.equal(result.scoring_version, SCORING_VERSION);
   assert.equal(result.scoring_method, "rules_fallback");
   assert.ok(result.ghost_score <= 39);
   assert.notEqual(result.alert_level, "alert");

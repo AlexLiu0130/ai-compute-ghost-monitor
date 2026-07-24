@@ -3,10 +3,11 @@ import { drizzle } from "drizzle-orm/d1";
 import { alerts } from "../../db/schema";
 import seed from "../data/seed-alerts.json";
 import { reviewEvent } from "./agent-harness";
+import { syncCnMirror } from "./cn-sync";
 import { normalizeArticle } from "./ghost";
 import { enrichMarketImpact, marketImpactNeedsRefresh } from "./market-impact";
 import { recoverTruncatedFeed } from "./qveris-result";
-import { scoreEvent, shouldCritique } from "./scoring";
+import { SCORING_VERSION, scoreEvent, shouldCritique } from "./scoring";
 
 const TOOL = "alphavantage.news_sentiment.query.v1.467a92c0";
 const TOPICS = ["technology", "financial_markets"];
@@ -22,6 +23,8 @@ type CaptureEnv = {
   DB?: D1Database;
   QVERIS_API_KEY?: string;
   DEEPSEEK_API_KEY?: string;
+  CN_SYNC_URL?: string;
+  CN_SYNC_TOKEN?: string;
 };
 type Row = Record<string, unknown>;
 const list = (value: unknown) => Array.isArray(value) ? value : [];
@@ -97,7 +100,7 @@ async function legacyStoredRows(db: D1Database, limit: number) {
   for (const item of result.results || []) {
     try {
       const row = JSON.parse(item.payload) as Row;
-      if (row.scoring_version !== "anchored-v3") rows.push(row);
+      if (row.scoring_version !== SCORING_VERSION) rows.push(row);
     } catch {
       // Ignore malformed legacy rows; /api/alerts already treats the database as fallible.
     }
@@ -267,7 +270,7 @@ export async function runCapture(env: CaptureEnv) {
   const seedKeys = env.DEEPSEEK_API_KEY && storedLegacy.length < LEGACY_REVIEW_LIMIT
     ? await existingKeys(env.DB, seed as Row[]) : new Set<string>();
   const seedLegacy = (seed as Row[])
-    .filter((row) => row.scoring_version !== "anchored-v3" && !seedKeys.has(keyOf(row)))
+    .filter((row) => row.scoring_version !== SCORING_VERSION && !seedKeys.has(keyOf(row)))
     .slice(0, LEGACY_REVIEW_LIMIT - storedLegacy.length);
   const legacy = env.DEEPSEEK_API_KEY
     ? [...storedLegacy, ...seedLegacy].map((row) => scoreEvent(row)) : [];
@@ -283,12 +286,24 @@ export async function runCapture(env: CaptureEnv) {
 
   await storeRows(env.DB, writeRows);
 
+  let cnSync: Awaited<ReturnType<typeof syncCnMirror>> | { status: "error"; rows: 0 } = {
+    status: "disabled",
+    rows: 0,
+  };
+  try {
+    cnSync = await syncCnMirror(env, writeRows);
+  } catch (error) {
+    errors.push(`cn_sync:${error instanceof Error ? error.message : "failed"}`);
+    cnSync = { status: "error", rows: 0 };
+  }
+
   const result = {
     fetched: raw.length,
     captured: rows.length,
     stored: writeRows.length,
     migrated: migrated.length,
     impacts_refreshed: refreshedFresh + refreshedStale,
+    cn_sync: cnSync,
     mode: "global",
     errors,
     ts: new Date().toISOString(),

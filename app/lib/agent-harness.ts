@@ -1,5 +1,5 @@
 import { AGENT_PROMPT_VERSION, GHOST_TYPES, analysisMessages, critiqueMessages } from "./agent-prompts.ts";
-import { isTrackedTicker, type EventAnalysis, type EventCritique, type TickerImpact } from "./scoring.ts";
+import { isTrackedTicker, SCORING_VERSION, type EventAnalysis, type EventCritique, type TickerImpact } from "./scoring.ts";
 
 type Row = Record<string, unknown>;
 type ScoreEvent = (baseRow: Row, analysis?: EventAnalysis, critique?: EventCritique) => Row;
@@ -18,7 +18,7 @@ function fallback(row: Row, prompt: "analysis" | "critique", status: Trace["stat
   Object.assign(row, {
     ghost_score: score, relevance_score: score, priorityScore: score,
     alert_level: alertLevel, alertLevel,
-    scoring_version: "anchored-v3", scoring_method: "rules_fallback",
+    scoring_version: SCORING_VERSION, scoring_method: "rules_fallback",
   });
   row.analysis_method = "rules_fallback";
   row.rationale = [...(Array.isArray(row.rationale) ? row.rationale : []), `agent_${prompt}=${status}${error ? `:${error}` : ""}`, "agent_fallback_score_cap=39"];

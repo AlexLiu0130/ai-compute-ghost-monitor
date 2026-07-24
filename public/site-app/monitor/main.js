@@ -23,6 +23,7 @@ const TYPE_ZH = {
   order_inventory_weakness: "订单/库存走弱",
   hbm_shortage: "HBM/内存短缺",
   capacity_flood: "产能扩张/供给冲击",
+  demand_order_strength: "订单/盈利增强",
   data_center_delay: "数据中心延期",
   financing_stress: "融资压力",
   export_regulatory: "出口/监管",
@@ -35,6 +36,7 @@ const TYPE_EN = {
   order_inventory_weakness: "Order / Inventory Weakness",
   hbm_shortage: "HBM / Memory Shortage",
   capacity_flood: "Capacity Expansion",
+  demand_order_strength: "Demand / Earnings Strength",
   data_center_delay: "Data Center Delay",
   financing_stress: "Financing Stress",
   export_regulatory: "Export / Regulation",
@@ -48,6 +50,7 @@ const TYPE_COLOR = {
   order_inventory_weakness: "#f0883e",
   hbm_shortage: "#67d4e0",
   capacity_flood: "#6cb6ff",
+  demand_order_strength: "#43d785",
   data_center_delay: "#e3b341",
   financing_stress: "#ff8f7a",
   export_regulatory: "#9fb6c9",
@@ -432,7 +435,7 @@ function renderDetail(a, container) {
         <span class="badge lvl-${esc(a.alert_level)}">${esc((state.lang === "en" ? LEVEL_EN : LEVEL_ZH)[a.alert_level] || a.alert_level)}</span>
         <span class="dir-tag type-tag" style="--tc:${esc(typeColor(a.ghost_type))}">${esc(fmtType(a.ghost_type))}</span>
         <span class="dir-tag">${a.analysis_method === "llm" ? ui("大模型分析", "LLM") : ui("规则兜底", "Rules")}</span>
-        <span class="dir-tag">${a.scoring_version === "anchored-v3" ? ui("评分 v3", "Score v3") : ui("历史评分", "Legacy score")}</span>
+        <span class="dir-tag">${String(a.scoring_version || "").startsWith("anchored-v") ? ui("当前评分", "Current score") : ui("历史评分", "Legacy score")}</span>
         <span class="row-time">${relTime(a.published_at)}</span>
       </div>
       <h2 class="detail-title">${titleHtml(a)}</h2>

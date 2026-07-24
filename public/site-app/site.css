@@ -1393,3 +1393,7 @@ a {
     transform: translateY(12px) scale(1);
   }
 }
+
+.site-footer a {
+  color: inherit;
+}
