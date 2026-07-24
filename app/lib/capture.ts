@@ -25,7 +25,6 @@ type CaptureEnv = {
   DEEPSEEK_API_KEY?: string;
   CN_SYNC_URL?: string;
   CN_SYNC_TOKEN?: string;
-  CN_SYNC_BOOTSTRAP?: string;
 };
 type Row = Record<string, unknown>;
 const list = (value: unknown) => Array.isArray(value) ? value : [];
@@ -218,7 +217,7 @@ async function storeRows(binding: D1Database, rows: Row[]) {
   }
 }
 
-async function bootstrapCnMirror(env: CaptureEnv) {
+export async function bootstrapCnMirror(env: CaptureEnv) {
   if (!env.DB) throw new Error("D1 binding DB is unavailable");
   let offset = 0;
   let synced = 0;
@@ -316,16 +315,12 @@ export async function runCapture(env: CaptureEnv) {
 
   await storeRows(env.DB, writeRows);
 
-  let cnSync: Awaited<ReturnType<typeof syncCnMirror>>
-    | { status: "error"; rows: 0 }
-    | { status: "synced"; rows: number; batches: number } = {
+  let cnSync: Awaited<ReturnType<typeof syncCnMirror>> | { status: "error"; rows: 0 } = {
     status: "disabled",
     rows: 0,
   };
   try {
-    cnSync = env.CN_SYNC_BOOTSTRAP === "1"
-      ? await bootstrapCnMirror(env)
-      : await syncCnMirror(env, writeRows);
+    cnSync = await syncCnMirror(env, writeRows);
   } catch (error) {
     errors.push(`cn_sync:${error instanceof Error ? error.message : "failed"}`);
     cnSync = { status: "error", rows: 0 };
