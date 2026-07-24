@@ -25,6 +25,7 @@ type CaptureEnv = {
   DEEPSEEK_API_KEY?: string;
   CN_SYNC_URL?: string;
   CN_SYNC_TOKEN?: string;
+  CN_SYNC_BOOTSTRAP?: string;
 };
 type Row = Record<string, unknown>;
 const list = (value: unknown) => Array.isArray(value) ? value : [];
@@ -217,6 +218,35 @@ async function storeRows(binding: D1Database, rows: Row[]) {
   }
 }
 
+async function bootstrapCnMirror(env: CaptureEnv) {
+  if (!env.DB) throw new Error("D1 binding DB is unavailable");
+  let offset = 0;
+  let synced = 0;
+  let batches = 0;
+  while (true) {
+    const result = await env.DB.prepare(
+      "SELECT payload FROM alerts ORDER BY published_at DESC LIMIT 100 OFFSET ?",
+    ).bind(offset).all<{ payload: string }>();
+    const items = result.results || [];
+    const rows = items.flatMap((item) => {
+      try {
+        const row = JSON.parse(item.payload);
+        return row && typeof row === "object" ? [row as Row] : [];
+      } catch {
+        return [];
+      }
+    });
+    if (rows.length) {
+      await syncCnMirror(env, rows);
+      synced += rows.length;
+      batches += 1;
+    }
+    if (items.length < 100) break;
+    offset += items.length;
+  }
+  return { status: "synced" as const, rows: synced, batches };
+}
+
 export async function runCapture(env: CaptureEnv) {
   if (!env.QVERIS_API_KEY) throw new Error("QVERIS_API_KEY is not configured");
   if (!env.DB) throw new Error("D1 binding DB is unavailable");
@@ -286,12 +316,16 @@ export async function runCapture(env: CaptureEnv) {
 
   await storeRows(env.DB, writeRows);
 
-  let cnSync: Awaited<ReturnType<typeof syncCnMirror>> | { status: "error"; rows: 0 } = {
+  let cnSync: Awaited<ReturnType<typeof syncCnMirror>>
+    | { status: "error"; rows: 0 }
+    | { status: "synced"; rows: number; batches: number } = {
     status: "disabled",
     rows: 0,
   };
   try {
-    cnSync = await syncCnMirror(env, writeRows);
+    cnSync = env.CN_SYNC_BOOTSTRAP === "1"
+      ? await bootstrapCnMirror(env)
+      : await syncCnMirror(env, writeRows);
   } catch (error) {
     errors.push(`cn_sync:${error instanceof Error ? error.message : "failed"}`);
     cnSync = { status: "error", rows: 0 };
